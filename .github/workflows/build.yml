@@ -168,9 +168,17 @@ jobs:
         run: |
           VERSION=$(node -p "require('./app.json').expo.version")
           TAG="v${VERSION}-build.${GITHUB_RUN_NUMBER}"
+          # Changelog: commits since the previous release tag (or all commits if first release)
+          PREV=$(gh release view --json tagName -q .tagName 2>/dev/null || true)
+          if [ -n "$PREV" ]; then
+            NOTES=$(git log --pretty='- %s' "$PREV".."$GITHUB_SHA" -- ':!.github')
+          else
+            NOTES=$(git log --pretty='- %s' "$GITHUB_SHA" -- ':!.github' | head -30)
+          fi
+          [ -z "$NOTES" ] && NOTES="No code changes (rebuild)."
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --title "v${VERSION} (build ${GITHUB_RUN_NUMBER})" \
-            --generate-notes --target "$GITHUB_SHA"
+            --notes "$NOTES" --target "$GITHUB_SHA"
           gh release upload "$TAG" $(ls "$IPA_NAME" "$APK_NAME" 2>/dev/null) --clobber
 
   deploy:
