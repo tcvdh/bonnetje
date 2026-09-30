@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 # Links the package to the repository, so on GHCR it shows the source and inherits the repository's visibility.
 LABEL org.opencontainers.image.source="https://github.com/tcvdh/bonnetje" \
       org.opencontainers.image.licenses="AGPL-3.0-only" \
