@@ -137,7 +137,7 @@ RECEIPT_ADMIN_PORT=3001
 RECEIPT_ADMIN_KEY=a-password-only-you-know     # not the same as RECEIPT_APP_KEY
 ```
 
-Then open <http://localhost:3001> on the machine that runs the server and log in with the admin key. What it shows and does:
+Then open `http://<server-ip>:3001` from any machine on your local network and log in with the admin key. What it shows and does:
 
 - **Overview:** households active, scans this month, storage, requests and wrong keys since the server started, whether Albert Heijn and scanning are
   on. The four server-wide limits are editable here (a value set here wins over `.env`; *Herstel* goes back to `.env` / the default).
@@ -147,12 +147,13 @@ Then open <http://localhost:3001> on the machine that runs the server and log in
 
 How it is kept private:
 
-- It listens on `127.0.0.1` only by default (`RECEIPT_ADMIN_HOST`; Docker: see below), on a different port from the app's server, and is never part of the app's API.
-- Every call needs the admin key (in a header, not a cookie), and only requests addressed to `localhost`, `127.0.0.1` or `[::1]` are answered, so a web
-  page in your browser cannot reach it (DNS rebinding) and, without CORS headers, cannot call it either. Wrong keys: 10 a minute, then blocked.
-- Docker: the image listens on all interfaces *inside* the container, and `compose.yml` publishes it as `127.0.0.1:3001:3001`. Keep the `127.0.0.1:`; leaving it
-  out publishes the dashboard on your whole network (the key still protects it, but there is no reason to expose it). Open it over an SSH tunnel
-  (`ssh -L 3001:localhost:3001 server`) when the server is another machine.
+- It runs on a different port from the app's server and is never part of the app's API.
+- Every call needs the admin key (in a header, not a cookie), and only requests from private/LAN addresses are answered
+  (localhost, private IPs, `.local` mDNS), so the public internet cannot reach it even if the port is open. A web page
+  outside your network cannot call it (DNS rebinding blocked by the host-header check), and without CORS headers,
+  cannot call it cross-origin either. Wrong keys: 10 a minute, then blocked.
+- Docker: the image listens on all interfaces *inside* the container, and `compose.yml` publishes it as `3001:3001`
+  (LAN-accessible). Access it from any machine on your local network.
 - Everything it changes is written to the log (`admin: household ... changed`), never a key.
 
 ## Albert Heijn (optional)

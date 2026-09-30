@@ -23,9 +23,9 @@ The server holds your receipts, receipt photos and (with `RECEIPT_USE_AH_API=tru
   The app itself refuses plain `http://` for anything but local addresses.
 - **Keep `.env` and `state/` private.** They contain your keys, the database, the photos and the AH tokens.
   Never commit them; back up `state/` somewhere private.
-- **Admin dashboard:** off by default. When on (`RECEIPT_ADMIN_PORT` + `RECEIPT_ADMIN_KEY`) it is a separate port that only
-  listens on localhost, needs its own key on every call and only answers to localhost host names. Publish it on the host's
-  `127.0.0.1` only (never `-p 3001:3001` without `127.0.0.1:`) and use an SSH tunnel to reach it remotely.
+- **Admin dashboard:** off by default. When on (`RECEIPT_ADMIN_PORT` + `RECEIPT_ADMIN_KEY`) it is a separate port that
+  needs its own key on every call and only answers requests from private/LAN addresses (localhost, private IPs, `.local`
+  mDNS), so it is not reachable from the public internet even if the port is open.
 - **Albert Heijn integration:** off by default and only for your own server (it uses an unofficial API). A server
   that other people use should leave `RECEIPT_USE_AH_API` off.
 - **Gemini:** receipt photos are sent to Google. See [PRIVACY.md](PRIVACY.md).

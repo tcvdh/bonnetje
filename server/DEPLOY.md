@@ -13,7 +13,7 @@ docker run -d --name bonnetje \
 ```
 
 Or with Docker Compose — create `compose.yml` (the [`compose.yml`](compose.yml) in this folder is the same plus hardening
-and the local admin port; use that one for a server other people use):
+and the admin port; use that one for a server other people use):
 
 ```yaml
 services:
@@ -50,7 +50,7 @@ RECEIPT_GEMINI_KEY=your-gemini-key
 | `RECEIPT_IBAN`, `RECEIPT_NAME` | for payment QR | Where housemates pay. Without them the app shows a warning instead of a QR code. |
 | `RECEIPT_GEMINI_KEY` | for scanning | Gemini API key; without it, photo scanning is off. Photos are sent to Google (privacy note in [README.md](README.md#scanning-receipts-gemini)). |
 | `RECEIPT_REQUESTS_PER_MINUTE`, `RECEIPT_SCANS_PER_MINUTE`, `RECEIPT_SCANS_PER_MONTH`, `RECEIPT_PHOTO_DAYS`, `RECEIPT_TRUSTED_PROXY`, `RECEIPT_CORS_ORIGIN` | no | Limits and privacy settings for a server that other people use (see [README.md](README.md#settings)). |
-| `RECEIPT_ADMIN_PORT`, `RECEIPT_ADMIN_KEY` | no | Turn on the local admin dashboard, see [below](#admin-dashboard-local-only). |
+| `RECEIPT_ADMIN_PORT`, `RECEIPT_ADMIN_KEY` | no | Turn on the admin dashboard, see [below](#admin-dashboard-lan-only). |
 | `RECEIPT_USE_AH_API` | no | Default `false`. `true` = unofficial Albert Heijn integration, **self-hosting only** (see below). |
 | `RECEIPT_PORT` | no | Default `3000`. |
 | `RECEIPT_HOST` | no | Default `0.0.0.0`. |
@@ -68,14 +68,15 @@ docker exec -u bonnetje bonnetje python3 server.py tenant list
 
 Give the printed key to that household; they enter your server address and that key in the app. The other commands
 (`rotate`, `revoke`, `payee`, `limit`, `delete`) are in [README.md](README.md#households-more-than-one-group), and the
-[dashboard](#admin-dashboard-local-only) does all of it in a web page. Use `-u bonnetje`: the server runs as that unprivileged user, and files created by root could not be used by it.
+[dashboard](#admin-dashboard-lan-only) does all of it in a web page. Use `-u bonnetje`: the server runs as that unprivileged user, and files created by root could not be used by it.
 
-## Admin dashboard (local only)
+## Admin dashboard (LAN only)
 
-Add `RECEIPT_ADMIN_PORT=3001` and `RECEIPT_ADMIN_KEY=<a password only you know>` to `.env` and publish the port **on the host's
-127.0.0.1 only** (the included `compose.yml` does: `127.0.0.1:3001:3001`; with `docker run` use `-p 127.0.0.1:3001:3001`). Then open
-<http://localhost:3001> on that machine, or over an SSH tunnel (`ssh -L 3001:localhost:3001 <server>`) from your own computer.
-Everything the dashboard can do is described in [README.md](README.md#admin-dashboard).
+Add `RECEIPT_ADMIN_PORT=3001` and `RECEIPT_ADMIN_KEY=<a password only you know>` to `.env` and publish the port
+(the included `compose.yml` does: `3001:3001`; with `docker run` use `-p 3001:3001`). Then open
+`http://<server-ip>:3001` from any machine on your local network. The dashboard only answers requests from private/LAN
+addresses (localhost, private IPs, `.local` mDNS) and needs the admin key on every call, so it is not reachable from
+the public internet. Everything the dashboard can do is described in [README.md](README.md#admin-dashboard).
 
 ## Running it for other people
 
