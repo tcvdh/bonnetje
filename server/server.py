@@ -25,7 +25,7 @@ Configure with environment variables:
   RECEIPT_NAME      the name on that account
   RECEIPT_REQUESTS_PER_MINUTE  default 120: requests per minute per household (0 = unlimited)
   RECEIPT_SCANS_PER_MINUTE     default 5: Gemini scans per minute per household (0 = unlimited)
-  RECEIPT_SCANS_PER_MONTH  default 0 (unlimited): Gemini scans per month for households from `tenant add`
+  RECEIPT_SCANS_PER_WEEK   default 25: Gemini scans per week for households from `tenant add` (0 = unlimited)
   RECEIPT_PHOTO_DAYS       default 0 (keep): delete photos of kept receipts after this many days
                            (these four can also be changed live in the admin dashboard, which wins over the environment)
   RECEIPT_ADMIN_PORT, RECEIPT_ADMIN_KEY  turn on the local admin dashboard (see admin.py); RECEIPT_ADMIN_HOST is 127.0.0.1
@@ -95,7 +95,7 @@ AUTH_FAIL_WINDOW = 60         # ... within this many seconds
 LIMIT_SETTINGS = {  # name: (environment variable, built-in default)
     "requests_per_minute": ("RECEIPT_REQUESTS_PER_MINUTE", 120),  # a busy household opening the app: ~30 in a burst
     "scans_per_minute": ("RECEIPT_SCANS_PER_MINUTE", 5),
-    "scans_per_month": ("RECEIPT_SCANS_PER_MONTH", 0),            # 0 = unlimited
+    "scans_per_week": ("RECEIPT_SCANS_PER_WEEK", 25),
     "photo_days": ("RECEIPT_PHOTO_DAYS", 0),                      # 0 = keep photos
 }
 STATS = {"requests": 0, "unauthorized": 0, "rateLimited": 0, "scans": 0, "errors": 0}  # since the server started
@@ -166,8 +166,8 @@ def run_scan(tenant: Tenant, scan_id: str, image: bytes, mime: str, created_at: 
     rate = tenant.scan_rate if tenant.scan_rate is not None else setting("scans_per_minute")
     if rate and not SCAN_LIMITER.take(tenant.id, rate):
         raise scanning.ScanError("scan_rate_limited", "Je scant te snel. Wacht even en probeer het opnieuw.", 429)
-    if not HOUSEHOLDS.try_count_scan(tenant, setting("scans_per_month")):
-        raise scanning.ScanError("scan_quota", "Je scanlimiet voor deze maand is bereikt.", 429)
+    if not HOUSEHOLDS.try_count_scan(tenant, setting("scans_per_week")):
+        raise scanning.ScanError("scan_quota", "Je scanlimiet voor deze week is bereikt.", 429)
     STATS["scans"] += 1
     scan, issues, warnings = scanning.scan_image(image, mime)
     today = time.strftime("%Y-%m-%d")

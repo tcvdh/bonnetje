@@ -50,7 +50,7 @@ RECEIPT_GEMINI_KEY=your-gemini-key
 | `RECEIPT_APP_KEY` | yes, unless you only use households | The server's password (the built-in household); the app sends it. Any text works, a long random one is safer: `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'` |
 | `RECEIPT_IBAN`, `RECEIPT_NAME` | for payment QR | Where housemates pay. Without them the app shows a warning instead of a QR code. |
 | `RECEIPT_GEMINI_KEY` | for scanning | Gemini API key; without it, photo scanning is off. Photos are sent to Google (privacy note in [README.md](README.md#scanning-receipts-gemini)). |
-| `RECEIPT_REQUESTS_PER_MINUTE`, `RECEIPT_SCANS_PER_MINUTE`, `RECEIPT_SCANS_PER_MONTH`, `RECEIPT_PHOTO_DAYS`, `RECEIPT_TRUSTED_PROXY`, `RECEIPT_CORS_ORIGIN` | no | Limits and privacy settings for a server that other people use (see [README.md](README.md#settings)). |
+| `RECEIPT_REQUESTS_PER_MINUTE`, `RECEIPT_SCANS_PER_MINUTE`, `RECEIPT_SCANS_PER_WEEK`, `RECEIPT_PHOTO_DAYS`, `RECEIPT_TRUSTED_PROXY`, `RECEIPT_CORS_ORIGIN` | no | Limits and privacy settings for a server that other people use (see [README.md](README.md#settings)). |
 | `RECEIPT_ADMIN_PORT`, `RECEIPT_ADMIN_KEY` | no | Turn on the admin dashboard, see [below](#admin-dashboard-lan-only). |
 | `RECEIPT_USE_AH_API` | no | Default `false`. `true` = unofficial Albert Heijn integration, **self-hosting only** (see below). |
 | `RECEIPT_PORT` | no | Default `3000`. |
@@ -82,7 +82,7 @@ the public internet. Everything the dashboard can do is described in [README.md]
 ## Running it for other people
 
 Besides the settings above, for a server that others use: `RECEIPT_TRUSTED_PROXY=<your proxy>`,
-`RECEIPT_CORS_ORIGIN=` (empty), `RECEIPT_SCANS_PER_MONTH=<n>`, `RECEIPT_PHOTO_DAYS=<n>` (and adjust the per-minute limits if you
+`RECEIPT_CORS_ORIGIN=` (empty), `RECEIPT_SCANS_PER_WEEK=<n>`, `RECEIPT_PHOTO_DAYS=<n>` (and adjust the per-minute limits if you
 like, in `.env` or in the dashboard), leave `RECEIPT_USE_AH_API` off, HTTPS in front, and the hardened [`compose.yml`](compose.yml) from this folder. Read [SECURITY.md](../SECURITY.md) and
 [PRIVACY.md](../PRIVACY.md) first.
 

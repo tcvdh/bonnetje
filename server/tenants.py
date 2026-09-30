@@ -55,7 +55,7 @@ class Tenant:
         self.db_path = root / "receipt.db"
         self.scan_dir = root / "scans"
         # Per-household overrides from the registry; None = the server-wide default, 0 = unlimited.
-        self.scan_limit: int | None = None     # Gemini scans per month
+        self.scan_limit: int | None = None     # Gemini scans per week
         self.request_limit: int | None = None  # requests per minute
         self.scan_rate: int | None = None      # scans per minute
         self.auth_lock = threading.Lock()  # Albert Heijn token refresh
@@ -270,7 +270,7 @@ class Tenant:
 
 
 class Households:
-    """The registry: which key belongs to which household, plus scan usage per month."""
+    """The registry: which key belongs to which household, plus scan usage per week."""
 
     def __init__(self, data_dir: Path, use_default: bool):
         self.data_dir = Path(data_dir)
@@ -409,12 +409,12 @@ class Households:
 
     # -- scan usage
     @staticmethod
-    def _month() -> str:
-        return time.strftime("%Y-%m")
+    def _week() -> str:
+        return time.strftime("%G-W%V")
 
-    def scans_this_month(self, tid: str) -> int:
+    def scans_this_week(self, tid: str) -> int:
         with self._reg() as c:
-            row = c.execute("SELECT scans FROM usage WHERE tenant_id = ? AND month = ?", (tid, self._month())).fetchone()
+            row = c.execute("SELECT scans FROM usage WHERE tenant_id = ? AND month = ?", (tid, self._week())).fetchone()
         return row["scans"] if row else 0
 
     def scans_total(self, tid: str) -> int:
@@ -459,34 +459,34 @@ class Households:
         self._settings_cache = (0.0, {})
 
     def try_count_scan(self, tenant: Tenant, default_limit: int) -> bool:
-        """Counts one Gemini call for this household this month; False when its monthly limit is used up.
+        """Counts one Gemini call for this household this week; False when its weekly limit is used up.
         The default household is never limited. 0 means unlimited."""
         limit = 0 if tenant.id == DEFAULT_ID else (tenant.scan_limit if tenant.scan_limit is not None else default_limit)
         with self._reg() as c:
             c.execute("BEGIN IMMEDIATE")
-            row = c.execute("SELECT scans FROM usage WHERE tenant_id = ? AND month = ?", (tenant.id, self._month())).fetchone()
+            row = c.execute("SELECT scans FROM usage WHERE tenant_id = ? AND month = ?", (tenant.id, self._week())).fetchone()
             used = row["scans"] if row else 0
             if limit and used >= limit:
                 return False
             c.execute(
                 "INSERT INTO usage (tenant_id, month, scans) VALUES (?, ?, 1) "
                 "ON CONFLICT(tenant_id, month) DO UPDATE SET scans = scans + 1",
-                (tenant.id, self._month()),
+                (tenant.id, self._week()),
             )
             return True
 
 
 # ── the `tenant` command ─────────────────────────────────────────────────
 
-LIMIT_COLUMNS = {"month": "scan_limit", "requests": "request_limit", "rate": "scan_rate"}
+LIMIT_COLUMNS = {"week": "scan_limit", "requests": "request_limit", "rate": "scan_rate"}
 
 USAGE = """Households (each has its own key and its own private data):
   python3 server.py tenant add "Name" [--scans N]   create one; prints its key once
-  python3 server.py tenant list                     all households and this month's scans
+  python3 server.py tenant list                     all households and this week's scans
   python3 server.py tenant rotate ID                new key (the old one stops working)
   python3 server.py tenant revoke ID | enable ID    switch a household off / on
-  python3 server.py tenant limit ID month|requests|rate N|default
-                                                    scans per month / requests per minute / scans per minute
+  python3 server.py tenant limit ID week|requests|rate N|default
+                                                    scans per week / requests per minute / scans per minute
                                                     (0 = unlimited, default = the server-wide value)
   python3 server.py tenant payee ID IBAN "Name"     where this household's housemates pay
   python3 server.py tenant delete ID --yes          delete the household and ALL its data
@@ -508,13 +508,13 @@ def cli(hh: Households, args: list[str], iban_valid) -> int:
             print(f"Household created: {tenant.name}\n  id:  {tenant.id}\n  key: {key}\n"
                   "The key is shown only once; give it to the household (it goes into the app).")
         elif cmd == "list":
-            print(f"{'id':<18}{'name':<24}{'state':<10}{'scans (month)':<15}limit")
+            print(f"{'id':<18}{'name':<24}{'state':<10}{'scans (week)':<15}limit")
             if hh.use_default:
-                print(f"{DEFAULT_ID:<18}{'(RECEIPT_APP_KEY)':<24}{'active':<10}{hh.scans_this_month(DEFAULT_ID):<15}-")
+                print(f"{DEFAULT_ID:<18}{'(RECEIPT_APP_KEY)':<24}{'active':<10}{hh.scans_this_week(DEFAULT_ID):<15}-")
             for r in hh.rows():
-                limit = "default" if r["scan_limit"] is None else (r["scan_limit"] or "unlimited")  # scans per month
+                limit = "default" if r["scan_limit"] is None else (r["scan_limit"] or "unlimited")
                 print(f"{r['id']:<18}{r['name']:<24}{'off' if r['disabled'] else 'active':<10}"
-                      f"{hh.scans_this_month(r['id']):<15}{limit}")
+                      f"{hh.scans_this_week(r['id']):<15}{limit}")
         elif cmd == "rotate" and len(args) == 2:
             print(f"New key: {hh.rotate(args[1])}\nThe old key no longer works.")
         elif cmd in ("revoke", "enable") and len(args) == 2:

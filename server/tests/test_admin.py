@@ -78,15 +78,15 @@ class AdminTests(unittest.TestCase):
         admin._failures = admin.Limiter(60)
 
     def test_create_change_rotate_and_delete_a_household(self):
-        tid, key = self.make("Family", month=10, requests=50)
+        tid, key = self.make("Family", week=10, requests=50)
         self.assertEqual(HH.authenticate(key, server.APP_KEY).id, tid)
         listed = {h["id"]: h for h in self.call("GET", "/api/households")[1]}
-        self.assertEqual(listed[tid]["limits"]["month"], {"own": 10, "effective": 10})
+        self.assertEqual(listed[tid]["limits"]["week"], {"own": 10, "effective": 10})
         self.assertEqual(listed[tid]["limits"]["rate"]["own"], None)
         self.assertIn(tid, listed)
         self.assertNotIn(key, json.dumps(listed))  # keys can never be read back
 
-        self.assertEqual(self.call("PUT", f"/api/households/{tid}", {"name": "Renamed", "month": None, "rate": 2})[0], 200)
+        self.assertEqual(self.call("PUT", f"/api/households/{tid}", {"name": "Renamed", "week": None, "rate": 2})[0], 200)
         row = HH.row(tid)
         self.assertEqual((row["name"], row["scan_limit"], row["scan_rate"], row["request_limit"]), ("Renamed", None, 2, 50))
 
@@ -105,8 +105,8 @@ class AdminTests(unittest.TestCase):
 
     def test_bad_input_is_refused(self):
         self.assertEqual(self.call("POST", "/api/households", {"name": "  "})[0], 400)
-        self.assertEqual(self.call("POST", "/api/households", {"name": "x", "month": -1})[0], 400)
-        self.assertEqual(self.call("POST", "/api/households", {"name": "x", "month": True})[0], 400)
+        self.assertEqual(self.call("POST", "/api/households", {"name": "x", "week": -1})[0], 400)
+        self.assertEqual(self.call("POST", "/api/households", {"name": "x", "week": True})[0], 400)
         self.assertEqual(self.call("POST", "/api/households", {"name": "x", "rate": "5"})[0], 400)
         tid, _ = self.make("Valid")
         self.assertEqual(self.call("PUT", f"/api/households/{tid}", {"payee": {"iban": "NL00", "name": "X"}})[0], 400)
@@ -127,7 +127,7 @@ class AdminTests(unittest.TestCase):
         listed = self.call("GET", "/api/households")[1]
         default = [h for h in listed if h["id"] == "default"][0]
         self.assertTrue(default["builtin"])
-        self.assertEqual(default["limits"]["month"]["effective"], 0)
+        self.assertEqual(default["limits"]["week"]["effective"], 0)
         for status in (self.call("POST", "/api/households/default/rotate")[0],
                        self.call("DELETE", "/api/households/default", {"confirm": "default"})[0],
                        self.call("PUT", "/api/households/default", {"disabled": True})[0]):

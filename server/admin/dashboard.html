@@ -94,7 +94,7 @@
     <div id="households" hidden>
       <div class="toolbar"><span class="sub" id="householdsSub"></span><button id="newHousehold">Nieuw huishouden</button></div>
       <div class="scroll"><table>
-        <thead><tr><th>Huishouden</th><th>Status</th><th>Laatst gezien</th><th>Bonnetjes</th><th>Scans (maand)</th><th>Limieten per minuut</th><th>Opslag</th><th>AH</th><th></th></tr></thead>
+        <thead><tr><th>Huishouden</th><th>Status</th><th>Laatst gezien</th><th>Bonnetjes</th><th>Scans (week)</th><th>Limieten per minuut</th><th>Opslag</th><th>AH</th><th></th></tr></thead>
         <tbody id="rows"></tbody>
       </table></div>
     </div>
@@ -156,7 +156,7 @@ function render() {
   const card = (n, l) => h("div", { class: "card" }, h("div", { class: "n" }, n), h("div", { class: "l" }, l));
   $("#cards").replaceChildren(
     card(`${o.totals.active} / ${o.totals.households}`, "huishoudens actief"),
-    card(o.totals.scansMonth, "scans deze maand"),
+    card(o.totals.scansWeek, "scans deze week"),
     card(fmtBytes(o.totals.bytes), "opslag (data + foto's)"),
     card(o.counters.requests, "verzoeken sinds start"),
     card(o.counters.scans, "scans sinds start"),
@@ -164,7 +164,7 @@ function render() {
     card(o.counters.rateLimited, "afgeremd (429)"),
     card(o.counters.errors, "serverfouten"),
   );
-  const NAMES = { requests_per_minute: "Verzoeken per minuut", scans_per_minute: "Scans per minuut", scans_per_month: "Scans per maand", photo_days: "Foto's bewaren (dagen)" };
+  const NAMES = { requests_per_minute: "Verzoeken per minuut", scans_per_minute: "Scans per minuut", scans_per_week: "Scans per week", photo_days: "Foto's bewaren (dagen)" };
   $("#settings").replaceChildren(...Object.entries(o.settings).map(([name, v]) => h("div", {},
     h("label", { for: "set-" + name }, NAMES[name], " ", h("span", { class: "badge" }, SOURCE[v.source])),
     h("input", { id: "set-" + name, type: "number", min: "0", value: v.value, "data-name": name }),
@@ -189,7 +189,7 @@ function row(x) {
     h("td", {}, x.disabled ? h("span", { class: "badge bad" }, "Uit") : h("span", { class: "badge good" }, "Actief")),
     h("td", {}, fmtAgo(x.lastSeen)),
     h("td", {}, st ? `${st.scans} gescand` : "?", st ? h("small", {}, `${st.receiptsSplit} verdeeld, ${st.invoices} afrekeningen`) : null),
-    h("td", {}, `${x.scansMonth} / ${x.limits.month.effective === 0 ? "∞" : x.limits.month.effective}`, h("small", {}, `${x.scansTotal} totaal`)),
+    h("td", {}, `${x.scansWeek} / ${x.limits.week.effective === 0 ? "∞" : x.limits.week.effective}`, h("small", {}, `${x.scansTotal} totaal`)),
     h("td", {}, `${limitText(x.limits.requests)} verzoeken`, h("small", {}, `${limitText(x.limits.rate)} scans`)),
     h("td", {}, st ? fmtBytes(st.bytes) : "?", st ? h("small", {}, `${st.photos} foto's`) : null),
     h("td", {}, st && st.ahLoggedIn ? h("span", { class: "badge good" }, "ingelogd") : h("span", { class: "badge" }, "-")),
@@ -229,7 +229,7 @@ function editDialog(x) {
     x && x.builtin ? h("p", { class: "sub", style: "display:block" }, "Dit huishouden is de RECEIPT_APP_KEY uit .env. Alleen het betaalaccount is hier te wijzigen.") : null,
     x && x.builtin ? null : field("Naam", "e-name", x ? x.name : "", { maxlength: "60" }),
     x && x.builtin ? null : h("div", { class: "row" },
-      lim("Scans per maand", "e-month", "month", "scans_per_month"),
+      lim("Scans per week", "e-week", "week", "scans_per_week"),
       lim("Verzoeken per minuut", "e-requests", "requests", "requests_per_minute"),
       lim("Scans per minuut", "e-rate", "rate", "scans_per_minute")),
     isNew ? null : h("div", { class: "row" },
@@ -242,11 +242,11 @@ function editDialog(x) {
     try {
       $("#e-err").textContent = "";
       if (isNew) {
-        const r = await api("POST", "/api/households", { name: $("#e-name").value, month: numOrNull("e-month"), requests: numOrNull("e-requests"), rate: numOrNull("e-rate") });
+        const r = await api("POST", "/api/households", { name: $("#e-name").value, week: numOrNull("e-week"), requests: numOrNull("e-requests"), rate: numOrNull("e-rate") });
         close(dlg); await load(); keyDialog("Huishouden aangemaakt", r.key); return;
       }
       const body = {};
-      if (!x.builtin) Object.assign(body, { name: $("#e-name").value, month: numOrNull("e-month"), requests: numOrNull("e-requests"), rate: numOrNull("e-rate") });
+      if (!x.builtin) Object.assign(body, { name: $("#e-name").value, week: numOrNull("e-week"), requests: numOrNull("e-requests"), rate: numOrNull("e-rate") });
       const iban = $("#e-iban").value.trim(), pname = $("#e-payee").value.trim();
       if (iban || pname) body.payee = { iban, name: pname }; else if (payee) body.payee = null;
       await api("PUT", "/api/households/" + x.id, body);

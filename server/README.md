@@ -39,7 +39,7 @@ All settings are environment variables (passed via `--env-file` with Docker, or 
 | `RECEIPT_DATA_DIR` | no | Default `./state`. The Docker image fixes it to `/data`. |
 | `RECEIPT_REQUESTS_PER_MINUTE` | no | Default `120`. Requests per minute per household (`0` = unlimited). Opening the app takes about 3 requests plus one per open receipt, so a busy household bursts to roughly 30. |
 | `RECEIPT_SCANS_PER_MINUTE` | no | Default `5`. Gemini scans per minute per household (`0` = unlimited). |
-| `RECEIPT_SCANS_PER_MONTH` | no | Default `0` (unlimited). Gemini scans per month for each household made with `tenant add`. The built-in household is never limited. |
+| `RECEIPT_SCANS_PER_WEEK` | no | Default `25`. Gemini scans per week for each household made with `tenant add` (`0` = unlimited). The built-in household is never limited. |
 | `RECEIPT_PHOTO_DAYS` | no | Default `0` (keep). Delete the photo of a kept receipt after this many days (the receipt itself stays; a rescan is then no longer possible). |
 | `RECEIPT_ADMIN_PORT`, `RECEIPT_ADMIN_KEY` | no | Both set = the [admin dashboard](#admin-dashboard) runs on that port, protected by that key. `RECEIPT_ADMIN_HOST` (default `127.0.0.1`; the Docker image sets `0.0.0.0`) is where it listens. Only private/LAN addresses are answered either way. |
 | `RECEIPT_TRUSTED_PROXY` | no | Address(es) of your reverse proxy, comma-separated (for Docker usually the proxy container or the Docker gateway). Only requests from these are allowed to say who the real client is (`X-Forwarded-For`), so the rate limits work per person instead of per proxy. |
@@ -74,11 +74,11 @@ is stored on the server.
 
 | Command (`python3 server.py tenant ...`) | |
 |---|---|
-| `add "Name" [--scans N]` | create a household; `--scans` is its monthly Gemini scan limit |
-| `list` | all households, their state and this month's scans |
+| `add "Name" [--scans N]` | create a household; `--scans` is its weekly Gemini scan limit |
+| `list` | all households, their state and this week's scans |
 | `rotate ID` | new key; the old one stops working at once |
 | `revoke ID` / `enable ID` | switch a household off / on again (its data stays) |
-| `limit ID month\|requests\|rate N` | that household's own limit: scans per month / requests per minute / scans per minute (`0` = unlimited); `N` = `default` goes back to the server-wide value |
+| `limit ID week\|requests\|rate N` | that household's own limit: scans per week / requests per minute / scans per minute (`0` = unlimited); `N` = `default` goes back to the server-wide value |
 | `payee ID IBAN "Name"` | where that household's housemates pay (the built-in one uses `RECEIPT_IBAN` / `RECEIPT_NAME`) |
 | `delete ID --yes` | delete the household and **all** its data, photos included |
 
@@ -92,7 +92,7 @@ Good to know:
   (or take a consistent copy of its database with `sqlite3 receipt.db ".backup copy.db"`); deleting one is `tenant delete`.
 - **Without `RECEIPT_APP_KEY`** the server only knows the households you added. It refuses to start when there is neither.
 - **Hosting for other people:** keep `RECEIPT_USE_AH_API` off (unofficial API, not for other people's use), set
-  `RECEIPT_SCANS_PER_MONTH`, `RECEIPT_PHOTO_DAYS`, `RECEIPT_TRUSTED_PROXY` and an empty `RECEIPT_CORS_ORIGIN`, and
+  `RECEIPT_SCANS_PER_WEEK`, `RECEIPT_PHOTO_DAYS`, `RECEIPT_TRUSTED_PROXY` and an empty `RECEIPT_CORS_ORIGIN`, and
   read [Security](#security) and [PRIVACY.md](../PRIVACY.md) (you are then responsible for their data).
 - **Not there yet:** self-service sign-up and payments (households are created by you), several keys per household
   (one per phone), setting the payment account from inside the app, and running several server copies at once
@@ -116,7 +116,7 @@ What protects the server, and the settings that tune it:
 |---|---|
 | Keys | Compared in constant time. Households made with `tenant add` get 256-bit random keys, stored only as a SHA-256 hash; a lost phone: `tenant rotate`. Wrong keys: 10 a minute per client address, then `429`. |
 | Isolation | One database and photo folder per household (see above). Data files are private to the server user (`0600` / `0700`). |
-| Limits | Per household (defaults, all adjustable): 120 requests and 5 scans a minute, optional scans per month. Request bodies at most 2 MB (photos 25 MB), at most 128 connections at once, 60 s socket timeout. |
+| Limits | Per household (defaults, all adjustable): 120 requests and 5 scans a minute, 25 scans per week. Request bodies at most 2 MB (photos 25 MB), at most 128 connections at once, 60 s socket timeout. |
 | Admin dashboard | A separate port, only reachable from your local network (private IPs, localhost, `.local`), with its own key (see below). Off unless you turn it on. |
 | Real client address | With a reverse proxy, set `RECEIPT_TRUSTED_PROXY` to the proxy's address; otherwise every visitor looks like the proxy. |
 | Web | No cookies (token in a header), so no CSRF. `RECEIPT_CORS_ORIGIN=` (empty) for a public server. Every response is `no-store` and `nosniff`; the server page has a strict CSP. |

@@ -37,8 +37,8 @@ def _is_private_host(host: str) -> bool:
     except ValueError:
         return host.endswith(".local")  # mDNS names
 MAX_BODY = 64 * 1024
-LIMIT_FIELDS = {"month": "scan_limit", "requests": "request_limit", "rate": "scan_rate"}
-SETTING_MAX = {"requests_per_minute": 1_000_000, "scans_per_minute": 1_000_000, "scans_per_month": 1_000_000, "photo_days": 3650}
+LIMIT_FIELDS = {"week": "scan_limit", "requests": "request_limit", "rate": "scan_rate"}
+SETTING_MAX = {"requests_per_minute": 1_000_000, "scans_per_minute": 1_000_000, "scans_per_week": 1_000_000, "photo_days": 3650}
 _failures = Limiter(60)
 
 
@@ -65,13 +65,13 @@ class Api:
     # -- views
     def _limits(self, tenant, builtin: bool) -> dict:
         ctx = self.ctx
-        own = {"month": tenant.scan_limit, "requests": tenant.request_limit, "rate": tenant.scan_rate}
-        server = {"month": ctx.setting("scans_per_month"), "requests": ctx.setting("requests_per_minute"),
+        own = {"week": tenant.scan_limit, "requests": tenant.request_limit, "rate": tenant.scan_rate}
+        server = {"week": ctx.setting("scans_per_week"), "requests": ctx.setting("requests_per_minute"),
                   "rate": ctx.setting("scans_per_minute")}
         out = {}
         for name in own:
-            if builtin and name == "month":
-                out[name] = {"own": None, "effective": 0}  # the built-in household is never limited on scans per month
+            if builtin and name == "week":
+                out[name] = {"own": None, "effective": 0}  # the built-in household is never limited on scans per week
             else:
                 out[name] = {"own": own[name], "effective": server[name] if own[name] is None else own[name]}
         return out
@@ -85,7 +85,7 @@ class Api:
         return {
             "id": tenant.id, "name": tenant.name if not builtin else "Standaard (RECEIPT_APP_KEY)",
             "builtin": builtin, "disabled": disabled, "createdAt": created, "lastSeen": seen.get(tenant.id),
-            "scansMonth": self.hh.scans_this_month(tenant.id), "scansTotal": self.hh.scans_total(tenant.id),
+            "scansWeek": self.hh.scans_this_week(tenant.id), "scansTotal": self.hh.scans_total(tenant.id),
             "limits": self._limits(tenant, builtin), "stats": stats,
         }
 
@@ -104,7 +104,7 @@ class Api:
             "counters": dict(ctx.stats),
             "totals": {
                 "households": len(houses), "active": sum(1 for h in houses if not h["disabled"]),
-                "scansMonth": sum(h["scansMonth"] for h in houses),
+                "scansWeek": sum(h["scansWeek"] for h in houses),
                 "bytes": sum((h["stats"] or {}).get("bytes", 0) for h in houses),
             },
             "settings": {name: {"value": ctx.setting(name), "source": ctx.setting_source(name)} for name in SETTING_MAX},
@@ -120,7 +120,7 @@ class Api:
         name = str(body.get("name") or "").strip()
         if not name:
             raise BadInput("Geef het huishouden een naam.")
-        tenant, key = self.hh.add(name, _limit(body.get("month")), _limit(body.get("requests")), _limit(body.get("rate")))
+        tenant, key = self.hh.add(name, _limit(body.get("week")), _limit(body.get("requests")), _limit(body.get("rate")))
         log.info("admin: household %s created", tenant.id)
         return {"id": tenant.id, "key": key}
 
