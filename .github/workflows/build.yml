@@ -110,6 +110,9 @@ jobs:
         working-directory: bonnetje
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       # Fails early, with a clear message, if Pages is not switched on yet
       - id: pages
         uses: actions/configure-pages@v6
