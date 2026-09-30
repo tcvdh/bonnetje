@@ -55,8 +55,13 @@
     <button class="ghost" id="logout">Uitloggen bij Albert Heijn</button>
   </div>
 
+  <div class="card" id="disabledCard" hidden>
+    <strong>Albert Heijn-koppeling uitgeschakeld</strong>
+    <p>De AH-koppeling is niet ingeschakeld voor dit huishouden. Neem contact op met de serverbeheerder.</p>
+  </div>
+
   <div class="card" id="forgetCard" hidden>
-    <button class="ghost" id="forget">Sleutel vergeten</button>
+    <button class="ghost" id="forget">Andere server / sleutel</button>
   </div>
 
   <p class="sub"><a href="https://github.com/tcvdh/bonnetje" target="_blank" rel="noopener" style="color:var(--accent)">Broncode</a> (AGPL-3.0)</p>
@@ -70,7 +75,7 @@ async function api(path, opts = {}) {
 }
 async function refresh() {
   $("key").value = get();
-  $("offCard").hidden = $("keyCard").hidden = $("loginCard").hidden = $("outCard").hidden = $("forgetCard").hidden = true;
+  $("offCard").hidden = $("keyCard").hidden = $("loginCard").hidden = $("outCard").hidden = $("forgetCard").hidden = $("disabledCard").hidden = true;
   const health = await fetch("/api/health").then((r) => r.json()).catch(() => null);
   if (!health) { $("status").innerHTML = '<span class="err">De server reageert niet.</span>'; return; }
   if (!health.ahEnabled) {
@@ -82,6 +87,11 @@ async function refresh() {
   const { status, body } = await api("/api/auth/status");
   if (status === 401) { $("status").innerHTML = '<span class="err">De server draait. Vul de server-sleutel in.</span>'; $("keyCard").hidden = false; return; }
   $("forgetCard").hidden = false;
+  if (!body.ahEnabled) {
+    $("status").innerHTML = '<span class="ok">De server draait.</span>';
+    $("disabledCard").hidden = false;
+    return;
+  }
   if (body.loggedIn) {
     $("status").innerHTML = '<span class="ok">De server draait. Ingelogd bij Albert Heijn.</span> De server houdt de login zelf actief.';
     $("outCard").hidden = false;
