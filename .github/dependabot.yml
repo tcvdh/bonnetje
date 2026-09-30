@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # Workflow actions (pinned by tag) and the Docker base image: security fixes arrive as pull requests.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /server
+    schedule:
+      interval: weekly
+  # The app. Expo pins matching versions per SDK, so major bumps are done by hand (`npx expo install --fix`).
+  - package-ecosystem: npm
+    directory: /bonnetje
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "bonnetje",
+    "slug": "bonnetje",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bonnetje.splitter",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "NSLocalNetworkUsageDescription": "De app verbindt met je Bonnetje-server op het lokale netwerk."
+      },
+      "icon": "./assets/app-icon.icon"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0D100F",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.bonnetje.splitter"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Met de camera scan je bonnetjes.",
+          "photosPermission": "Kies een foto van een bonnetje uit je galerij."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          },
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b5245d65-e42c-43aa-80ec-48344d0223df"
+      }
+    }
+  }
+}

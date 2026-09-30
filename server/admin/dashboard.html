@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bonnetje beheer</title>
+<style>
+  :root { --bg:#0D100F; --surface:#151917; --raised:#1D2220; --line:#2a312e; --text:#E8EBE6; --sub:#9BA39E; --accent:#5CC8FF; --ink:#04222F; --good:#7BE0A4; --bad:#FF8378; --warn:#F5C26B; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,sans-serif; }
+  main { max-width:1320px; margin:0 auto; padding:20px 16px 60px; }
+  header { display:flex; flex-wrap:wrap; gap:12px 20px; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  h1 { font-size:24px; margin:0; letter-spacing:-.4px; }
+  h2 { font-size:16px; margin:26px 0 10px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:3px 12px; font-size:13px; color:var(--sub); }
+  .chip.on { color:var(--good); } .chip.off { color:var(--warn); }
+  nav { display:flex; gap:6px; margin:16px 0; border-bottom:1px solid var(--line); }
+  nav button { background:none; border:0; color:var(--sub); font:600 15px system-ui; padding:10px 14px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+  nav button[aria-selected=true] { color:var(--text); border-color:var(--accent); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; }
+  .card { background:var(--surface); border-radius:14px; padding:14px 16px; }
+  .card .n { font-size:26px; font-weight:700; letter-spacing:-.5px; }
+  .card .l { color:var(--sub); font-size:13px; }
+  .panel { background:var(--surface); border-radius:14px; padding:16px; }
+  table { width:100%; border-collapse:collapse; }
+  .scroll { overflow-x:auto; background:var(--surface); border-radius:14px; }
+  table { font-size:14px; }
+  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); vertical-align:top; white-space:nowrap; }
+  th { color:var(--sub); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.4px; }
+  tr:last-child td { border-bottom:0; }
+  td small, .sub { color:var(--sub); font-size:12px; display:block; }
+  .badge { display:inline-block; border-radius:999px; padding:1px 10px; font-size:12px; font-weight:600; background:var(--raised); color:var(--sub); }
+  .badge.good { color:var(--good); } .badge.bad { color:var(--bad); } .badge.warn { color:var(--warn); }
+  button, .btn { font:600 14px system-ui; border:0; border-radius:10px; padding:8px 13px; background:var(--accent); color:var(--ink); cursor:pointer; }
+  button.ghost { background:var(--raised); color:var(--text); }
+  button.danger { background:rgba(255,131,120,.15); color:var(--bad); }
+  button.small { padding:4px 10px; font-size:13px; }
+  button:disabled { opacity:.4; cursor:default; }
+  button:focus-visible, input:focus-visible, nav button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .actions { display:flex; flex-wrap:wrap; gap:6px; width:190px; }
+  td.wrap { white-space:normal; }
+  input { width:100%; padding:9px 11px; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--text); font:15px system-ui; }
+  label { display:block; font-size:13px; color:var(--sub); margin:12px 0 4px; }
+  .row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:0 14px; }
+  .toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  dialog { background:var(--surface); color:var(--text); border:1px solid var(--line); border-radius:16px; padding:20px; width:min(560px,94vw); }
+  dialog::backdrop { background:rgba(0,0,0,.6); }
+  dialog h3 { margin:0 0 4px; font-size:18px; }
+  dialog .foot { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+  .key { font:14px ui-monospace,monospace; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:12px; word-break:break-all; margin:12px 0; user-select:all; }
+  .err { color:var(--bad); min-height:1.4em; margin:8px 0 0; }
+  dl { display:grid; grid-template-columns:max-content 1fr; gap:6px 18px; margin:0; }
+  dt { color:var(--sub); } dd { margin:0; word-break:break-all; }
+  #login { max-width:380px; margin:12vh auto 0; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <section id="login" class="panel" hidden>
+    <h1>Bonnetje beheer</h1>
+    <p class="sub" style="display:block">Alleen bereikbaar vanaf deze computer. Vul de beheersleutel in (<code>RECEIPT_ADMIN_KEY</code>).</p>
+    <label for="adminKey">Beheersleutel</label>
+    <input id="adminKey" type="password" autocomplete="off">
+    <p class="err" id="loginErr" role="alert"></p>
+    <button id="loginBtn">Inloggen</button>
+  </section>
+
+  <section id="app" hidden>
+    <header>
+      <h1>Bonnetje beheer</h1>
+      <div class="chips" id="chips"></div>
+      <button class="ghost small" id="logout">Uitloggen</button>
+    </header>
+    <nav role="tablist">
+      <button role="tab" id="tab-overview" aria-selected="true">Overzicht</button>
+      <button role="tab" id="tab-households" aria-selected="false">Huishoudens</button>
+    </nav>
+
+    <div id="overview">
+      <div class="grid" id="cards"></div>
+      <h2>Limieten voor de hele server</h2>
+      <div class="panel">
+        <p class="sub" style="display:block;margin-top:0">Geldt voor elk huishouden dat geen eigen limiet heeft. Een waarde die je hier instelt wint van het .env-bestand. 0 = onbeperkt.</p>
+        <div class="row" id="settings"></div>
+        <p class="err" id="settingsErr" role="alert"></p>
+        <button id="saveSettings">Opslaan</button>
+      </div>
+      <h2>Server</h2>
+      <div class="panel"><dl id="info"></dl></div>
+    </div>
+
+    <div id="households" hidden>
+      <div class="toolbar"><span class="sub" id="householdsSub"></span><button id="newHousehold">Nieuw huishouden</button></div>
+      <div class="scroll"><table>
+        <thead><tr><th>Huishouden</th><th>Status</th><th>Laatst gezien</th><th>Bonnetjes</th><th>Scans (maand)</th><th>Limieten per minuut</th><th>Opslag</th><th>AH</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+    </div>
+  </section>
+  <p class="sub"><a href="https://github.com/tcvdh/bonnetje" target="_blank" rel="noopener" style="color:var(--accent)">Broncode</a> (AGPL-3.0)</p>
+</main>
+
+<dialog id="editDlg"></dialog>
+<dialog id="keyDlg"></dialog>
+<dialog id="deleteDlg"></dialog>
+
+<script>
+const $ = (s) => document.querySelector(s);
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, "");
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const kid of kids.flat(Infinity)) if (kid != null && kid !== false) e.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  return e;
+}
+const store = { get: () => { try { return sessionStorage.getItem("adminKey") || ""; } catch { return ""; } }, set: (v) => { try { v ? sessionStorage.setItem("adminKey", v) : sessionStorage.removeItem("adminKey"); } catch {} } };
+
+async function api(method, path, body) {
+  const r = await fetch(path, { method, headers: { "Content-Type": "application/json", Authorization: "Bearer " + store.get() }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) { showLogin("De beheersleutel klopt niet."); throw new Error("unauthorized"); }
+  if (!r.ok) throw new Error(data.message || data.error || "Fout " + r.status);
+  return data;
+}
+
+const fmtBytes = (n) => n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(0) + " KB" : n < 1073741824 ? (n / 1048576).toFixed(1) + " MB" : (n / 1073741824).toFixed(2) + " GB";
+const fmtAgo = (t) => { if (!t) return "nooit"; const s = Math.max(0, Date.now() / 1000 - t); return s < 90 ? "zojuist" : s < 5400 ? Math.round(s / 60) + " min geleden" : s < 129600 ? Math.round(s / 3600) + " uur geleden" : Math.round(s / 86400) + " dagen geleden"; };
+const fmtDur = (s) => s < 3600 ? Math.round(s / 60) + " min" : s < 172800 ? (s / 3600).toFixed(1) + " uur" : Math.round(s / 86400) + " dagen";
+const limitText = (l) => (l.effective === 0 ? "onbeperkt" : String(l.effective)) + (l.own === null ? "" : " *");
+const SOURCE = { dashboard: "dashboard", environment: ".env", "built-in": "standaard" };
+
+let state = { overview: null, households: [] };
+
+function showLogin(msg) { store.set(""); $("#app").hidden = true; $("#login").hidden = false; $("#loginErr").textContent = msg || ""; $("#adminKey").focus(); }
+
+async function load() {
+  const [overview, households] = await Promise.all([api("GET", "/api/overview"), api("GET", "/api/households")]);
+  state = { overview, households };
+  $("#login").hidden = true; $("#app").hidden = false;
+  render();
+}
+
+function render() {
+  const { overview: o, households } = state;
+  const s = o.server;
+  $("#chips").replaceChildren(
+    h("span", { class: "chip" }, "Draait " + fmtDur(s.uptimeSeconds)),
+    h("span", { class: "chip " + (s.ahEnabled ? "on" : "off") }, "Albert Heijn: " + (s.ahEnabled ? "aan" : "uit")),
+    h("span", { class: "chip " + (s.geminiEnabled ? "on" : "off") }, "Scannen: " + (s.geminiEnabled ? s.geminiModel : "uit (geen Gemini-sleutel)")),
+  );
+  const card = (n, l) => h("div", { class: "card" }, h("div", { class: "n" }, n), h("div", { class: "l" }, l));
+  $("#cards").replaceChildren(
+    card(`${o.totals.active} / ${o.totals.households}`, "huishoudens actief"),
+    card(o.totals.scansMonth, "scans deze maand"),
+    card(fmtBytes(o.totals.bytes), "opslag (data + foto's)"),
+    card(o.counters.requests, "verzoeken sinds start"),
+    card(o.counters.scans, "scans sinds start"),
+    card(o.counters.unauthorized, "verkeerde sleutels"),
+    card(o.counters.rateLimited, "afgeremd (429)"),
+    card(o.counters.errors, "serverfouten"),
+  );
+  const NAMES = { requests_per_minute: "Verzoeken per minuut", scans_per_minute: "Scans per minuut", scans_per_month: "Scans per maand", photo_days: "Foto's bewaren (dagen)" };
+  $("#settings").replaceChildren(...Object.entries(o.settings).map(([name, v]) => h("div", {},
+    h("label", { for: "set-" + name }, NAMES[name], " ", h("span", { class: "badge" }, SOURCE[v.source])),
+    h("input", { id: "set-" + name, type: "number", min: "0", value: v.value, "data-name": name }),
+    v.source === "dashboard" ? h("button", { class: "ghost small", style: "margin-top:6px", onclick: async () => { try { await api("PUT", "/api/settings", { [name]: null }); await load(); } catch (e) { $("#settingsErr").textContent = e.message; } } }, "Herstel naar .env / standaard") : null,
+  )));
+  $("#info").replaceChildren(...[
+    ["Databasemap", s.dataDir], ["Poort", s.port], ["Max. gelijktijdige verbindingen", s.maxConnections],
+    ["Ingebouwd huishouden (RECEIPT_APP_KEY)", s.builtinHousehold ? "ja" : "nee"],
+    ["Vertrouwde proxy's", s.trustedProxies.length ? s.trustedProxies.join(", ") : "geen"],
+    ["CORS", s.corsOrigin || "uit"],
+  ].flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)]));
+
+  $("#householdsSub").textContent = "* = eigen limiet; anders de waarde voor de hele server. Sleutels zijn niet terug te lezen: ze worden maar één keer getoond.";
+  $("#rows").replaceChildren(...households.map(row));
+}
+
+function row(x) {
+  const st = x.stats;
+  const btn = (label, cls, fn, disabled) => h("button", { class: "small " + cls, onclick: fn, disabled: !!disabled }, label);
+  return h("tr", {},
+    h("td", {}, h("strong", {}, x.name), h("small", {}, `${x.id} · ${st ? st.people : "?"} personen`)),
+    h("td", {}, x.disabled ? h("span", { class: "badge bad" }, "Uit") : h("span", { class: "badge good" }, "Actief")),
+    h("td", {}, fmtAgo(x.lastSeen)),
+    h("td", {}, st ? `${st.scans} gescand` : "?", st ? h("small", {}, `${st.receiptsSplit} verdeeld, ${st.invoices} afrekeningen`) : null),
+    h("td", {}, `${x.scansMonth} / ${x.limits.month.effective === 0 ? "∞" : x.limits.month.effective}`, h("small", {}, `${x.scansTotal} totaal`)),
+    h("td", {}, `${limitText(x.limits.requests)} verzoeken`, h("small", {}, `${limitText(x.limits.rate)} scans`)),
+    h("td", {}, st ? fmtBytes(st.bytes) : "?", st ? h("small", {}, `${st.photos} foto's`) : null),
+    h("td", {}, st && st.ahLoggedIn ? h("span", { class: "badge good" }, "ingelogd") : h("span", { class: "badge" }, "-")),
+    h("td", { class: "wrap" }, h("div", { class: "actions" },
+      btn("Bewerken", "ghost", () => editDialog(x)),
+      btn("Nieuwe sleutel", "ghost", () => rotate(x), x.builtin),
+      btn(x.disabled ? "Aanzetten" : "Uitzetten", "ghost", () => toggle(x), x.builtin),
+      btn("Verwijderen", "danger", () => deleteDialog(x), x.builtin),
+    )),
+  );
+}
+
+function close(dlg) { dlg.close(); }
+function field(label, id, value, opts = {}) { return h("div", {}, h("label", { for: id }, label), h("input", { id, value: value ?? "", ...opts })); }
+function numOrNull(id) { const v = $("#" + id).value.trim(); return v === "" ? null : Number(v); }
+
+function keyDialog(title, key) {
+  const dlg = $("#keyDlg");
+  dlg.replaceChildren(
+    h("h3", {}, title),
+    h("p", { class: "sub", style: "display:block" }, "Geef deze sleutel aan het huishouden: ze vullen hem in de app in, samen met het serveradres. Hij wordt maar één keer getoond."),
+    h("div", { class: "key" }, key),
+    h("div", { class: "foot" },
+      h("button", { class: "ghost", onclick: async (e) => { try { await navigator.clipboard.writeText(key); e.target.textContent = "Gekopieerd"; } catch { e.target.textContent = "Selecteer en kopieer zelf"; } } }, "Kopieer"),
+      h("button", { onclick: () => close(dlg) }, "Klaar")),
+  );
+  dlg.showModal();
+}
+
+function editDialog(x) {
+  const dlg = $("#editDlg"), isNew = !x, srv = state.overview.settings;
+  const own = (k) => (x ? x.limits[k].own : null);
+  const lim = (label, id, k, name) => field(`${label} (leeg = standaard ${srv[name].value === 0 ? "onbeperkt" : srv[name].value}; 0 = onbeperkt)`, id, own(k), { type: "number", min: "0", placeholder: "standaard" });
+  const payee = x && x.stats && x.stats.payee;
+  dlg.replaceChildren(...[
+    h("h3", {}, isNew ? "Nieuw huishouden" : x.builtin ? "Standaard huishouden" : "Huishouden bewerken"),
+    x && x.builtin ? h("p", { class: "sub", style: "display:block" }, "Dit huishouden is de RECEIPT_APP_KEY uit .env. Alleen het betaalaccount is hier te wijzigen.") : null,
+    x && x.builtin ? null : field("Naam", "e-name", x ? x.name : "", { maxlength: "60" }),
+    x && x.builtin ? null : h("div", { class: "row" },
+      lim("Scans per maand", "e-month", "month", "scans_per_month"),
+      lim("Verzoeken per minuut", "e-requests", "requests", "requests_per_minute"),
+      lim("Scans per minuut", "e-rate", "rate", "scans_per_minute")),
+    isNew ? null : h("div", { class: "row" },
+      field("Betaalaccount IBAN", "e-iban", payee ? payee.iban : "", { placeholder: x.builtin ? "leeg = RECEIPT_IBAN uit .env" : "NL00 BANK 0123 4567 89" }),
+      field("Naam op de rekening", "e-payee", payee ? payee.name : "", { maxlength: "70" })),
+    h("p", { class: "err", id: "e-err", role: "alert" }),
+    h("div", { class: "foot" }, h("button", { class: "ghost", onclick: () => close(dlg) }, "Annuleren"), h("button", { id: "e-save" }, isNew ? "Aanmaken" : "Opslaan")),
+].filter(Boolean));
+  $("#e-save").onclick = async () => {
+    try {
+      $("#e-err").textContent = "";
+      if (isNew) {
+        const r = await api("POST", "/api/households", { name: $("#e-name").value, month: numOrNull("e-month"), requests: numOrNull("e-requests"), rate: numOrNull("e-rate") });
+        close(dlg); await load(); keyDialog("Huishouden aangemaakt", r.key); return;
+      }
+      const body = {};
+      if (!x.builtin) Object.assign(body, { name: $("#e-name").value, month: numOrNull("e-month"), requests: numOrNull("e-requests"), rate: numOrNull("e-rate") });
+      const iban = $("#e-iban").value.trim(), pname = $("#e-payee").value.trim();
+      if (iban || pname) body.payee = { iban, name: pname }; else if (payee) body.payee = null;
+      await api("PUT", "/api/households/" + x.id, body);
+      close(dlg); await load();
+    } catch (e) { $("#e-err").textContent = e.message; }
+  };
+  dlg.showModal();
+}
+
+async function rotate(x) {
+  if (!confirm(`Nieuwe sleutel voor "${x.name}"? De oude sleutel werkt daarna niet meer.`)) return;
+  try { const r = await api("POST", `/api/households/${x.id}/rotate`); keyDialog("Nieuwe sleutel", r.key); } catch (e) { alert(e.message); }
+}
+async function toggle(x) {
+  if (!x.disabled && !confirm(`"${x.name}" uitzetten? De app van dit huishouden krijgt dan een foutmelding. De gegevens blijven bewaard.`)) return;
+  try { await api("PUT", "/api/households/" + x.id, { disabled: !x.disabled }); await load(); } catch (e) { alert(e.message); }
+}
+function deleteDialog(x) {
+  const dlg = $("#deleteDlg");
+  dlg.replaceChildren(
+    h("h3", {}, "Huishouden verwijderen"),
+    h("p", { class: "sub", style: "display:block" }, `Alle gegevens van "${x.name}" worden definitief verwijderd: bonnetjes, verdeling, afrekeningen en foto's (${x.stats ? fmtBytes(x.stats.bytes) : "?"}). Dit kan niet ongedaan worden gemaakt. Typ de naam om te bevestigen.`),
+    field("Naam", "d-name", ""),
+    h("p", { class: "err", id: "d-err", role: "alert" }),
+    h("div", { class: "foot" }, h("button", { class: "ghost", onclick: () => close(dlg) }, "Annuleren"), h("button", { class: "danger", id: "d-go" }, "Definitief verwijderen")),
+  );
+  $("#d-go").onclick = async () => {
+    try { await api("DELETE", "/api/households/" + x.id, { confirm: $("#d-name").value }); close(dlg); await load(); } catch (e) { $("#d-err").textContent = e.message; }
+  };
+  dlg.showModal();
+}
+
+function tab(name) {
+  for (const t of ["overview", "households"]) { $("#" + t).hidden = t !== name; $("#tab-" + t).setAttribute("aria-selected", String(t === name)); }
+}
+$("#tab-overview").onclick = () => tab("overview");
+$("#tab-households").onclick = () => tab("households");
+$("#newHousehold").onclick = () => editDialog(null);
+$("#logout").onclick = () => showLogin("");
+$("#loginBtn").onclick = () => { store.set($("#adminKey").value.trim()); load().catch((e) => { if (e.message !== "unauthorized") $("#loginErr").textContent = "Kan de server niet bereiken."; }); };
+$("#adminKey").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#loginBtn").click(); });
+$("#saveSettings").onclick = async () => {
+  try {
+    $("#settingsErr").textContent = "";
+    const body = {};
+    for (const input of document.querySelectorAll("#settings input")) {
+      const cur = state.overview.settings[input.dataset.name];
+      if (Number(input.value) !== cur.value) body[input.dataset.name] = Number(input.value);
+    }
+    if (Object.keys(body).length) await api("PUT", "/api/settings", body);
+    await load();
+  } catch (e) { $("#settingsErr").textContent = e.message; }
+};
+
+if (store.get()) load().catch(() => {}); else showLogin("");
+setInterval(() => { if (!$("#app").hidden && !document.querySelector("dialog[open]") && !document.activeElement?.matches("input")) load().catch(() => {}); }, 15000);
+</script>
+</body>
+</html>

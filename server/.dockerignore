@@ -1,0 +1,9 @@
+state/
+.env
+__pycache__/
+tests/
+tools/
+*.md
+*.yml
+.env.example
+run.sh

@@ -1,0 +1,21 @@
+services:
+  bonnetje:
+    image: ghcr.io/tcvdh/bonnetje-server
+    env_file: .env
+    volumes:
+      - ./state:/data
+    ports:
+      - 3000:3000
+      # The admin dashboard (needs RECEIPT_ADMIN_PORT=3001 and RECEIPT_ADMIN_KEY in .env). Keep "127.0.0.1:" in front:
+      # without it the dashboard would be reachable from your whole network.
+      - 127.0.0.1:3001:3001
+    restart: unless-stopped
+    # Hardening: the server itself runs unprivileged; the container starts with only the four capabilities the
+    # entrypoint needs to hand /data to that user, and has a read-only filesystem apart from /data and /tmp.
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, SETUID, SETGID]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    pids_limit: 256

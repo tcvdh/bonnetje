@@ -1,0 +1,27 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    paths: [server/**, .github/workflows/docker.yml]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      # Never publish an image whose tests fail (households, isolation, limits and the dashboard API are covered)
+      - run: python3 -m unittest discover -s server/tests
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: server
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/bonnetje-server:latest

@@ -1,0 +1,210 @@
+name: Build and publish
+
+# Run from the default branch (Actions tab > Build and publish > Run workflow).
+# GitHub Pages only accepts deployments from there.
+# Per platform pick: skip, github-hosted, or my own machine (runner labels my-pc / my-mac).
+on:
+  workflow_dispatch:
+    inputs:
+      android:
+        description: Android APK
+        type: choice
+        options: [skip, github-hosted, my-pc]
+        default: github-hosted
+      ios:
+        description: iOS IPA (added to altstore.json)
+        type: choice
+        options: [skip, github-hosted, my-mac]
+        default: github-hosted
+      version:
+        description: New version (optional, saved to app.json after a successful release)
+        default: ''
+
+permissions:
+  contents: write   # releases + version commit
+  pages: write
+  id-token: write   # deploy-pages
+
+concurrency:
+  group: build
+  cancel-in-progress: false
+
+env:
+  IPA_NAME: BonnetjeSplitter.ipa
+  APK_NAME: BonnetjeSplitter.apk
+
+jobs:
+  # Unsigned release APK (Expo template debug key, fine for sideloading).
+  android:
+    if: ${{ inputs.android != 'skip' }}
+    runs-on: ${{ inputs.android == 'my-pc' && fromJSON('["self-hosted","my-pc"]') || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: ./.github/actions/setup-app
+        with:
+          version: ${{ inputs.version }}
+          cache: ${{ inputs.android == 'github-hosted' && 'npm' || '' }}  # own machine keeps ~/.npm itself
+
+      - name: Build APK
+        working-directory: bonnetje
+        run: |
+          npx expo prebuild --platform android --no-install
+          cd android && ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk "../$APK_NAME"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android
+          path: bonnetje/${{ env.APK_NAME }}
+
+  # Unsigned IPA; AltStore / SideStore / Feather sign it on the phone.
+  ios:
+    if: ${{ inputs.ios != 'skip' }}
+    runs-on: ${{ inputs.ios == 'my-mac' && fromJSON('["self-hosted","my-mac"]') || 'macos-latest' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-app
+        with:
+          version: ${{ inputs.version }}
+          cache: ${{ inputs.ios == 'github-hosted' && 'npm' || '' }}  # own machine keeps ~/.npm itself
+
+      - name: Build IPA
+        working-directory: bonnetje
+        run: |
+          npx expo prebuild --platform ios --no-install
+          cd ios
+          pod install
+          set -o pipefail
+          xcodebuild \
+            -workspace bonnetje.xcworkspace \
+            -scheme bonnetje \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath ./build/bonnetje.xcarchive \
+            archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            EXPANDED_CODE_SIGN_IDENTITY="" \
+            2>&1 | tee build.log || { grep "error:" build.log; exit 1; }
+          mkdir -p Payload
+          cp -r ./build/bonnetje.xcarchive/Products/Applications/bonnetje.app Payload/
+          zip -qr "../$IPA_NAME" Payload/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ios
+          path: bonnetje/${{ env.IPA_NAME }}
+
+  # Builds the site (download page + altstore.json) and the GitHub release.
+  publish:
+    needs: [android, ios]
+    if: ${{ !cancelled() && (needs.android.result == 'success' || needs.ios.result == 'success') }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bonnetje
+    steps:
+      - uses: actions/checkout@v7
+      # Fails early, with a clear message, if Pages is not switched on yet
+      - id: pages
+        uses: actions/configure-pages@v6
+
+      - if: ${{ inputs.version != '' }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: node ../.github/scripts/set-version.js app.json "$VERSION"
+
+      # Artifacts of the platforms built in this run land in bonnetje/
+      - uses: actions/download-artifact@v8
+        with:
+          path: bonnetje
+          merge-multiple: true
+
+      - name: Assemble the site
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          mkdir site
+          cp assets/icon.png site/
+          cp ../.github/site/index.html site/
+          touch site/.nojekyll
+          cp -t site "$IPA_NAME" "$APK_NAME" 2>/dev/null || true
+
+          # Pages replaces the whole site, so a platform skipped in this run is
+          # carried over from the live site. (altstore.json only changes when the IPA does.)
+          if [ -f "$IPA_NAME" ]; then
+            MIN_OS=$(python3 -c "import plistlib,zipfile; z=zipfile.ZipFile('$IPA_NAME'); n=next(x for x in z.namelist() if x.startswith('Payload/') and x.endswith('/Info.plist') and x.count('/')==2); print(plistlib.load(z.open(n))['MinimumOSVersion'])")
+            python3 ../.github/scripts/altstore_source.py \
+              --site-url "$SITE_URL" \
+              --developer "$GITHUB_REPOSITORY_OWNER" \
+              --size "$(stat -c%s "$IPA_NAME")" \
+              --build "$GITHUB_RUN_NUMBER" \
+              --min-os "$MIN_OS" \
+              --notes "$(git log -1 --pretty=%s)" \
+              --app-json app.json \
+              --out site/altstore.json
+          else
+            for f in "$IPA_NAME" altstore.json; do
+              curl -fsSL -o "site/$f" "${SITE_URL%/}/$f" || rm -f "site/$f"
+            done
+          fi
+          [ -f "$APK_NAME" ] || curl -fsSL -o "site/$APK_NAME" "${SITE_URL%/}/$APK_NAME" || rm -f "site/$APK_NAME"
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: bonnetje/site
+
+      # Tag has the run number, so every build gets its own release and old files stay downloadable.
+      # A failure here (token cannot create releases, e.g. after workflow file changes) must not block the site.
+      - name: GitHub release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./app.json').expo.version")
+          TAG="v${VERSION}-build.${GITHUB_RUN_NUMBER}"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
+            --title "v${VERSION} (build ${GITHUB_RUN_NUMBER})" \
+            --generate-notes --target "$GITHUB_SHA"
+          gh release upload "$TAG" $(ls "$IPA_NAME" "$APK_NAME" 2>/dev/null) --clobber
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
+      - env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          {
+            echo "### Bonnetje Splitter is published"
+            echo "- Download page: ${PAGE_URL}"
+            echo "- Source for Feather / AltStore / SideStore: ${PAGE_URL}altstore.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Saves a version typed into the form back to app.json, once everything succeeded.
+  save-version:
+    if: ${{ inputs.version != '' }}
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          node .github/scripts/set-version.js bonnetje/app.json "$VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bonnetje/app.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Bump version to $VERSION"
+          git push

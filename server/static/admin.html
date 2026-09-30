@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bonnetje server</title>
+<style>
+  :root { --bg:#0D100F; --surface:#151917; --text:#E8EBE6; --sub:#9BA39E; --accent:#5CC8FF; --good:#7BE0A4; --bad:#FF8378; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,sans-serif; padding:24px 16px; }
+  main { max-width:520px; margin:0 auto; }
+  h1 { font-size:28px; margin:0 0 4px; letter-spacing:-.5px; }
+  p { color:var(--sub); }
+  .card { background:var(--surface); border-radius:16px; padding:18px; margin:16px 0; }
+  input { width:100%; padding:12px; border-radius:10px; border:1px solid #2a312e; background:#0D100F; color:var(--text); font:15px ui-monospace,monospace; }
+  input:focus-visible, button:focus-visible, a:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  button, .btn { display:inline-block; margin-top:10px; padding:12px 16px; border:0; border-radius:10px; background:var(--accent); color:#04222F; font:600 15px system-ui; cursor:pointer; text-decoration:none; }
+  button.ghost { background:#1D2220; color:var(--text); }
+  .ok { color:var(--good); } .err { color:var(--bad); }
+  ol { color:var(--sub); padding-left:20px; } li { margin:4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Bonnetje server</h1>
+  <p id="status">Laden…</p>
+
+  <div class="card" id="offCard" hidden>
+    <strong>Albert Heijn-koppeling staat uit</strong>
+    <p>Dit is de standaard (<code>RECEIPT_USE_AH_API=false</code>). Bonnetjes scannen en verdelen werkt gewoon.
+    De koppeling met Albert Heijn is alleen bedoeld voor wie zelf host en gebruikt een niet-officiële API.
+    Lees de sectie <em>Albert Heijn (optioneel)</em> in <code>server/README.md</code> als je hem wilt aanzetten.</p>
+  </div>
+
+  <div class="card" id="keyCard" hidden>
+    <label for="key">Server-sleutel</label>
+    <input id="key" type="password" autocomplete="off" placeholder="RECEIPT_APP_KEY">
+    <button id="saveKey">Opslaan</button>
+  </div>
+
+  <div class="card" id="loginCard" hidden>
+    <strong>Inloggen bij Albert Heijn</strong>
+    <ol>
+      <li>Open de inloglink en log in.</li>
+      <li>Na het inloggen probeert de browser <code>appie://login-exit?code=…</code> te openen. Kopieer alleen de code: het deel na <code>code=</code>.</li>
+      <li>Plak die code hieronder.</li>
+    </ol>
+    <a class="btn ghost" id="loginLink" target="_blank" rel="noopener">Open inloglink</a>
+    <input id="code" style="margin-top:12px" placeholder="code" autocomplete="off" spellcheck="false">
+    <button id="send">Inloggen met code</button>
+    <p id="msg" role="status"></p>
+  </div>
+
+  <div class="card" id="outCard" hidden>
+    <button class="ghost" id="logout">Uitloggen bij Albert Heijn</button>
+  </div>
+
+  <p class="sub"><a href="https://github.com/tcvdh/bonnetje" target="_blank" rel="noopener" style="color:var(--accent)">Broncode</a> (AGPL-3.0)</p>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const get = () => { try { return localStorage.getItem("key") || ""; } catch { return ""; } };
+async function api(path, opts = {}) {
+  const r = await fetch(path, { ...opts, headers: { "Content-Type": "application/json", Authorization: "Bearer " + get() } });
+  return { status: r.status, body: await r.json().catch(() => ({})) };
+}
+async function refresh() {
+  $("key").value = get();
+  $("offCard").hidden = $("keyCard").hidden = $("loginCard").hidden = $("outCard").hidden = true;
+  const health = await fetch("/api/health").then((r) => r.json()).catch(() => null);
+  if (!health) { $("status").innerHTML = '<span class="err">De server reageert niet.</span>'; return; }
+  if (!health.ahEnabled) {
+    $("status").innerHTML = '<span class="ok">De server draait.</span>';
+    $("offCard").hidden = false;
+    return;
+  }
+  const { status, body } = await api("/api/auth/status");
+  if (status === 401) { $("status").innerHTML = '<span class="err">De server draait. Vul de server-sleutel in.</span>'; $("keyCard").hidden = false; return; }
+  if (body.loggedIn) {
+    $("status").innerHTML = '<span class="ok">De server draait. Ingelogd bij Albert Heijn.</span> De server houdt de login zelf actief.';
+    $("outCard").hidden = false;
+  } else {
+    $("status").innerHTML = '<span class="err">De server draait. Niet ingelogd bij Albert Heijn.</span>';
+    $("loginLink").href = body.loginUrl; $("loginCard").hidden = false;
+    // The server only accepts a login code for a few minutes after you started a login from this page
+    $("loginLink").onclick = () => { api("/api/auth/begin", { method: "POST" }); };
+  }
+}
+$("saveKey").onclick = () => { try { localStorage.setItem("key", $("key").value.trim()); } catch {} refresh(); };
+$("send").onclick = async () => {
+  $("msg").textContent = "Bezig…";
+  await api("/api/auth/begin", { method: "POST" }); // pressing this button is you starting a login
+  const { body } = await api("/api/auth/exchange", { method: "POST", body: JSON.stringify({ code: $("code").value }) });
+  $("msg").textContent = body.ok ? "" : (body.error || "Inloggen mislukt. Probeer de link opnieuw.");
+  if (body.ok) { $("code").value = ""; refresh(); }
+};
+$("logout").onclick = async () => { await api("/api/auth/logout", { method: "POST" }); refresh(); };
+refresh();
+</script>
+</body>
+</html>

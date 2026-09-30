@@ -1,0 +1,25 @@
+name: Set up the app
+description: Node, optional version bump in app.json, npm install (run after checkout)
+inputs:
+  version:
+    description: Version to write to app.json (empty = leave as is)
+    default: ''
+  cache:
+    description: npm cache mode for setup-node ('npm' or '' for none)
+    default: npm
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: '24'
+        cache: ${{ inputs.cache }}
+        cache-dependency-path: bonnetje/package-lock.json
+    - if: ${{ inputs.version != '' }}
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: node .github/scripts/set-version.js bonnetje/app.json "$VERSION"
+    - shell: bash
+      working-directory: bonnetje
+      run: npm install
