@@ -192,7 +192,7 @@ function row(x) {
     h("td", {}, `${x.scansWeek} / ${x.limits.week.effective === 0 ? "∞" : x.limits.week.effective}`, h("small", {}, `${x.scansTotal} totaal`)),
     h("td", {}, `${limitText(x.limits.requests)} verzoeken`, h("small", {}, `${limitText(x.limits.rate)} scans`)),
     h("td", {}, st ? fmtBytes(st.bytes) : "?", st ? h("small", {}, `${st.photos} foto's`) : null),
-    h("td", {}, st && st.ahLoggedIn ? h("span", { class: "badge good" }, "ingelogd") : h("span", { class: "badge" }, "-")),
+    h("td", {}, (() => { const on = x.ahEnabled === null ? state.overview.server.ahEnabled : x.ahEnabled; if (!on) return h("span", { class: "badge" }, "uit"); return st && st.ahLoggedIn ? h("span", { class: "badge good" }, "ingelogd") : h("span", { class: "badge warn" }, "aan"); })()),
     h("td", { class: "wrap" }, h("div", { class: "actions" },
       btn("Bewerken", "ghost", () => editDialog(x)),
       btn("Nieuwe sleutel", "ghost", () => rotate(x), x.builtin),
@@ -232,6 +232,15 @@ function editDialog(x) {
       lim("Scans per week", "e-week", "week", "scans_per_week"),
       lim("Verzoeken per minuut", "e-requests", "requests", "requests_per_minute"),
       lim("Scans per minuut", "e-rate", "rate", "scans_per_minute")),
+    !x?.builtin && state.overview.server.ahEnabled ? (() => {
+      const cur = x ? x.ahEnabled : null;
+      const sel = h("select", { id: "e-ah" },
+        h("option", { value: "" }, "Standaard (aan)"),
+        h("option", { value: "true" }, "Aan"),
+        h("option", { value: "false" }, "Uit"));
+      sel.value = cur === null ? "" : String(cur);
+      return h("div", { class: "row" }, h("label", {}, "Albert Heijn integratie", h("small", { class: "sub" }, "Standaard volgt de serverinstelling"), sel));
+    })() : null,
     isNew ? null : h("div", { class: "row" },
       field("Betaalaccount IBAN", "e-iban", payee ? payee.iban : "", { placeholder: x.builtin ? "leeg = RECEIPT_IBAN uit .env" : "NL00 BANK 0123 4567 89" }),
       field("Naam op de rekening", "e-payee", payee ? payee.name : "", { maxlength: "70" })),
@@ -241,12 +250,19 @@ function editDialog(x) {
   $("#e-save").onclick = async () => {
     try {
       $("#e-err").textContent = "";
+      const ahEl = document.getElementById("e-ah");
+      const ahVal = ahEl ? (ahEl.value === "" ? null : ahEl.value === "true") : undefined;
       if (isNew) {
-        const r = await api("POST", "/api/households", { name: $("#e-name").value, week: numOrNull("e-week"), requests: numOrNull("e-requests"), rate: numOrNull("e-rate") });
+        const body = { name: $("#e-name").value, week: numOrNull("e-week"), requests: numOrNull("e-requests"), rate: numOrNull("e-rate") };
+        if (ahVal !== undefined) body.ahEnabled = ahVal;
+        const r = await api("POST", "/api/households", body);
         close(dlg); await load(); keyDialog("Huishouden aangemaakt", r.key); return;
       }
       const body = {};
-      if (!x.builtin) Object.assign(body, { name: $("#e-name").value, week: numOrNull("e-week"), requests: numOrNull("e-requests"), rate: numOrNull("e-rate") });
+      if (!x.builtin) {
+        Object.assign(body, { name: $("#e-name").value, week: numOrNull("e-week"), requests: numOrNull("e-requests"), rate: numOrNull("e-rate") });
+        if (ahVal !== undefined) body.ahEnabled = ahVal;
+      }
       const iban = $("#e-iban").value.trim(), pname = $("#e-payee").value.trim();
       if (iban || pname) body.payee = { iban, name: pname }; else if (payee) body.payee = null;
       await api("PUT", "/api/households/" + x.id, body);

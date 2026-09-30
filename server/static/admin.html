@@ -55,6 +55,10 @@
     <button class="ghost" id="logout">Uitloggen bij Albert Heijn</button>
   </div>
 
+  <div class="card" id="forgetCard" hidden>
+    <button class="ghost" id="forget">Sleutel vergeten</button>
+  </div>
+
   <p class="sub"><a href="https://github.com/tcvdh/bonnetje" target="_blank" rel="noopener" style="color:var(--accent)">Broncode</a> (AGPL-3.0)</p>
 </main>
 <script>
@@ -66,23 +70,24 @@ async function api(path, opts = {}) {
 }
 async function refresh() {
   $("key").value = get();
-  $("offCard").hidden = $("keyCard").hidden = $("loginCard").hidden = $("outCard").hidden = true;
+  $("offCard").hidden = $("keyCard").hidden = $("loginCard").hidden = $("outCard").hidden = $("forgetCard").hidden = true;
   const health = await fetch("/api/health").then((r) => r.json()).catch(() => null);
   if (!health) { $("status").innerHTML = '<span class="err">De server reageert niet.</span>'; return; }
   if (!health.ahEnabled) {
     $("status").innerHTML = '<span class="ok">De server draait.</span>';
     $("offCard").hidden = false;
+    if (get()) $("forgetCard").hidden = false;
     return;
   }
   const { status, body } = await api("/api/auth/status");
   if (status === 401) { $("status").innerHTML = '<span class="err">De server draait. Vul de server-sleutel in.</span>'; $("keyCard").hidden = false; return; }
+  $("forgetCard").hidden = false;
   if (body.loggedIn) {
     $("status").innerHTML = '<span class="ok">De server draait. Ingelogd bij Albert Heijn.</span> De server houdt de login zelf actief.';
     $("outCard").hidden = false;
   } else {
     $("status").innerHTML = '<span class="err">De server draait. Niet ingelogd bij Albert Heijn.</span>';
     $("loginLink").href = body.loginUrl; $("loginCard").hidden = false;
-    // The server only accepts a login code for a few minutes after you started a login from this page
     $("loginLink").onclick = () => { api("/api/auth/begin", { method: "POST" }); };
   }
 }
@@ -95,6 +100,7 @@ $("send").onclick = async () => {
   if (body.ok) { $("code").value = ""; refresh(); }
 };
 $("logout").onclick = async () => { await api("/api/auth/logout", { method: "POST" }); refresh(); };
+$("forget").onclick = () => { try { localStorage.removeItem("key"); } catch {} refresh(); };
 refresh();
 </script>
 </body>

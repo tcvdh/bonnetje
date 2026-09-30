@@ -460,17 +460,22 @@ class Handler(BaseHTTPRequestHandler):
                 return
         self._json({"error": "not_found"}, 404)
 
+    def _ah_for_tenant(self) -> bool:
+        t = self.tenant.ah_enabled
+        return t if t is not None else USE_AH_API
+
     def _route_auth(self, method: str, path: str) -> bool:
         tenant = self.tenant
+        ah = self._ah_for_tenant()
         if path == "/api/auth/status" and method == "GET":
             self._json({
                 **auth_status(tenant),
-                "ahEnabled": USE_AH_API,
-                "loginUrl": AH_LOGIN_URL if USE_AH_API else None,
+                "ahEnabled": ah,
+                "loginUrl": AH_LOGIN_URL if ah else None,
                 "scanEnabled": bool(scanning.GEMINI_KEY),
                 "payee": payee(tenant),
             })
-        elif path.startswith("/api/auth/") and path != "/api/auth/status" and not USE_AH_API:
+        elif path.startswith("/api/auth/") and path != "/api/auth/status" and not ah:
             raise AHError("ah_disabled", 404)  # begin / exchange / logout only exist with RECEIPT_USE_AH_API=true
         elif path == "/api/auth/begin" and method == "POST":
             tenant.begin_login(LOGIN_WINDOW)
@@ -492,11 +497,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def _route_receipts(self, method: str, path: str) -> bool:
         tenant = self.tenant
+        ah = self._ah_for_tenant()
         if method != "GET":
             return False
         if path == "/api/receipts":
             receipts, ah_error, cached_at = [], "", 0.0
-            if USE_AH_API:  # off: scans only, and no warning for the app
+            if ah:
                 try:
                     data = ah_graphql(tenant, RECEIPTS_QUERY, {"offset": 0, "limit": 100})
                     page = ((data or {}).get("data") or {}).get("posReceiptsPage")
@@ -519,7 +525,7 @@ class Handler(BaseHTTPRequestHandler):
         if receipt_id.startswith("scan_"):
             detail = tenant.scanned_detail(receipt_id)
         else:
-            detail = self._ah_detail(receipt_id) if USE_AH_API else None
+            detail = self._ah_detail(receipt_id) if ah else None
         self._json(detail if detail is not None else {"error": "not_found"}, 200 if detail is not None else 404)
         return True
 

@@ -87,6 +87,7 @@ class Api:
             "builtin": builtin, "disabled": disabled, "createdAt": created, "lastSeen": seen.get(tenant.id),
             "scansWeek": self.hh.scans_this_week(tenant.id), "scansTotal": self.hh.scans_total(tenant.id),
             "limits": self._limits(tenant, builtin), "stats": stats,
+            "ahEnabled": tenant.ah_enabled,
         }
 
     def households(self) -> list[dict]:
@@ -120,7 +121,9 @@ class Api:
         name = str(body.get("name") or "").strip()
         if not name:
             raise BadInput("Geef het huishouden een naam.")
-        tenant, key = self.hh.add(name, _limit(body.get("week")), _limit(body.get("requests")), _limit(body.get("rate")))
+        ah = body.get("ahEnabled")
+        ah_val = None if ah is None else (1 if ah else 0)
+        tenant, key = self.hh.add(name, _limit(body.get("week")), _limit(body.get("requests")), _limit(body.get("rate")), ah_val)
         log.info("admin: household %s created", tenant.id)
         return {"id": tenant.id, "key": key}
 
@@ -136,6 +139,9 @@ class Api:
         for short, column in LIMIT_FIELDS.items():
             if short in body:
                 changes[column] = _limit(body[short])
+        if "ahEnabled" in body:
+            ah = body["ahEnabled"]
+            changes["ah_enabled"] = None if ah is None else (1 if ah else 0)
         if "payee" in body:
             self._payee(tid, body["payee"])
         if changes:

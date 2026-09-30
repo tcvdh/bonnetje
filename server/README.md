@@ -140,10 +140,11 @@ RECEIPT_ADMIN_KEY=a-password-only-you-know     # not the same as RECEIPT_APP_KEY
 
 Then open `http://<server-ip>:3001` from any machine on your local network and log in with the admin key. What it shows and does:
 
-- **Overview:** households active, scans this month, storage, requests and wrong keys since the server started, whether Albert Heijn and scanning are
+- **Overview:** households active, scans this week, storage, requests and wrong keys since the server started, whether Albert Heijn and scanning are
   on. The four server-wide limits are editable here (a value set here wins over `.env`; *Herstel* goes back to `.env` / the default).
-- **Huishoudens:** per household: last seen, people, scanned and split receipts, invoices, scans this month against its limit, storage, whether it is
-  logged in to Albert Heijn. Actions: edit (name, its own limits, payment account), new key, switch off / on, delete (type its name to confirm).
+- **Huishoudens:** per household: last seen, people, scanned and split receipts, invoices, scans this week against its limit, storage, AH status.
+  Actions: edit (name, its own limits, AH on/off, payment account), new key, switch off / on, delete (type its name to confirm).
+  The AH toggle only appears when AH is enabled globally (`RECEIPT_USE_AH_API=true`); each household can be switched off individually.
   A new or replaced key is shown once: only hashes are stored, so a key can never be looked up later.
 
 How it is kept private:

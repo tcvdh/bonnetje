@@ -252,5 +252,22 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(self.call("GET", "/api/data", key=key)[0], 401)
 
 
+    def test_per_household_ah_override(self):
+        old, server.USE_AH_API = server.USE_AH_API, True
+        try:
+            # Default: follows global (True)
+            self.assertTrue(self.call("GET", "/api/auth/status", key=self.key_a)[1]["ahEnabled"])
+            # Disable AH for household A
+            HH.update(self.a.id, ah_enabled=0)
+            self.assertFalse(self.call("GET", "/api/auth/status", key=self.key_a)[1]["ahEnabled"])
+            # B still follows global
+            self.assertTrue(self.call("GET", "/api/auth/status", key=self.key_b)[1]["ahEnabled"])
+            # Auth routes blocked for A
+            self.assertEqual(self.call("POST", "/api/auth/begin", key=self.key_a)[0], 404)
+        finally:
+            server.USE_AH_API = old
+            HH.update(self.a.id, ah_enabled=None)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -58,6 +58,7 @@ class Tenant:
         self.scan_limit: int | None = None     # Gemini scans per week
         self.request_limit: int | None = None  # requests per minute
         self.scan_rate: int | None = None      # scans per minute
+        self.ah_enabled: bool | None = None    # None = follow global USE_AH_API
         self.auth_lock = threading.Lock()  # Albert Heijn token refresh
         self._login_lock = threading.Lock()
         self._login_open_until = 0.0
@@ -302,7 +303,7 @@ class Households:
                 " id TEXT PRIMARY KEY, name TEXT NOT NULL, key_hash TEXT NOT NULL UNIQUE,"
                 " created_at REAL NOT NULL, disabled INTEGER NOT NULL DEFAULT 0, scan_limit INTEGER)"
             )
-            for column in ("request_limit", "scan_rate"):  # added later: upgrade a registry made by an older version
+            for column in ("request_limit", "scan_rate", "ah_enabled"):
                 if column not in {r["name"] for r in c.execute("PRAGMA table_info(tenants)")}:
                     c.execute(f"ALTER TABLE tenants ADD COLUMN {column} INTEGER")
             c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
@@ -330,6 +331,7 @@ class Households:
         tenant = self._get(row["id"], row["name"], self.data_dir / "tenants" / row["id"])
         tenant.name = row["name"]
         tenant.scan_limit, tenant.request_limit, tenant.scan_rate = row["scan_limit"], row["request_limit"], row["scan_rate"]
+        tenant.ah_enabled = None if row["ah_enabled"] is None else bool(row["ah_enabled"])
         return tenant
 
     def rows(self) -> list[sqlite3.Row]:
@@ -358,13 +360,13 @@ class Households:
         return re.sub(r"[\x00-\x1f]", " ", str(name)).strip()[:60] or "household"
 
     def add(self, name: str, scan_limit: int | None = None, request_limit: int | None = None,
-            scan_rate: int | None = None) -> tuple[Tenant, str]:
+            scan_rate: int | None = None, ah_enabled: int | None = None) -> tuple[Tenant, str]:
         tid, key = secrets.token_hex(8), KEY_PREFIX + secrets.token_urlsafe(32)
         with self._reg() as c:
             c.execute(
-                "INSERT INTO tenants (id, name, key_hash, created_at, scan_limit, request_limit, scan_rate) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (tid, self.clean_name(name), _hash(key), time.time(), scan_limit, request_limit, scan_rate),
+                "INSERT INTO tenants (id, name, key_hash, created_at, scan_limit, request_limit, scan_rate, ah_enabled) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (tid, self.clean_name(name), _hash(key), time.time(), scan_limit, request_limit, scan_rate, ah_enabled),
             )
         tenant = self._registered(self.row(tid))
         tenant.init()
@@ -389,7 +391,7 @@ class Households:
 
     def update(self, tid: str, **fields) -> None:
         self.row(tid)
-        if not set(fields) <= {"name", "disabled", "scan_limit", "request_limit", "scan_rate"}:  # column names go into the SQL
+        if not set(fields) <= {"name", "disabled", "scan_limit", "request_limit", "scan_rate", "ah_enabled"}:
             raise ValueError("unknown household field")
         if "name" in fields:
             fields["name"] = self.clean_name(fields["name"])
@@ -488,6 +490,7 @@ USAGE = """Households (each has its own key and its own private data):
   python3 server.py tenant limit ID week|requests|rate N|default
                                                     scans per week / requests per minute / scans per minute
                                                     (0 = unlimited, default = the server-wide value)
+  python3 server.py tenant ah ID on|off|default     Albert Heijn integration for this household
   python3 server.py tenant payee ID IBAN "Name"     where this household's housemates pay
   python3 server.py tenant delete ID --yes          delete the household and ALL its data
 With Docker:  docker exec -u bonnetje bonnetje python3 server.py tenant ...
@@ -525,6 +528,10 @@ def cli(hh: Households, args: list[str], iban_valid) -> int:
             if value is not None and value < 0:
                 raise ValueError("a limit cannot be negative")
             hh.update(args[1], **{LIMIT_COLUMNS[args[2]]: value})
+            print("Done.")
+        elif cmd == "ah" and len(args) == 3 and args[2] in ("on", "off", "default"):
+            value = {"on": 1, "off": 0, "default": None}[args[2]]
+            hh.update(args[1], ah_enabled=value)
             print("Done.")
         elif cmd == "payee" and len(args) == 4:
             iban = re.sub(r"\s+", "", args[2]).upper()
