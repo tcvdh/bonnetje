@@ -20,7 +20,7 @@ ip=$(python3 -c 'import socket; s=socket.socket(socket.AF_INET, socket.SOCK_DGRA
 echo
 echo "  Server:  http://${ip}:${RECEIPT_PORT:-3000}   (server page; AH login there when RECEIPT_USE_AH_API=true)"
 echo "  Key:     ${RECEIPT_APP_KEY:-(none: households only)}"
-[ -n "${RECEIPT_ADMIN_PORT:-}" ] && [ -n "${RECEIPT_ADMIN_KEY:-}" ] && echo "  Admin:   http://localhost:${RECEIPT_ADMIN_PORT}   (only on this computer)"
+[ -n "${RECEIPT_ADMIN_PORT:-}" ] && [ -n "${RECEIPT_ADMIN_KEY:-}" ] && echo "  Admin:   http://localhost:${RECEIPT_ADMIN_PORT}   (LAN only)"
 echo
 
 exec python3 server.py

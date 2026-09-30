@@ -13,6 +13,7 @@ docker run -d --name bonnetje \
   --env-file .env \
   -v ./state:/data \
   -p 3000:3000 \
+  -p 3001:3001 \
   ghcr.io/tcvdh/bonnetje-server
 ```
 
@@ -40,7 +41,7 @@ All settings are environment variables (passed via `--env-file` with Docker, or 
 | `RECEIPT_SCANS_PER_MINUTE` | no | Default `5`. Gemini scans per minute per household (`0` = unlimited). |
 | `RECEIPT_SCANS_PER_MONTH` | no | Default `0` (unlimited). Gemini scans per month for each household made with `tenant add`. The built-in household is never limited. |
 | `RECEIPT_PHOTO_DAYS` | no | Default `0` (keep). Delete the photo of a kept receipt after this many days (the receipt itself stays; a rescan is then no longer possible). |
-| `RECEIPT_ADMIN_PORT`, `RECEIPT_ADMIN_KEY` | no | Both set = the local [admin dashboard](#admin-dashboard) runs on that port, protected by that key. `RECEIPT_ADMIN_HOST` (default `127.0.0.1`) is where it listens. |
+| `RECEIPT_ADMIN_PORT`, `RECEIPT_ADMIN_KEY` | no | Both set = the [admin dashboard](#admin-dashboard) runs on that port, protected by that key. `RECEIPT_ADMIN_HOST` (default `127.0.0.1`; the Docker image sets `0.0.0.0`) is where it listens. Only private/LAN addresses are answered either way. |
 | `RECEIPT_TRUSTED_PROXY` | no | Address(es) of your reverse proxy, comma-separated (for Docker usually the proxy container or the Docker gateway). Only requests from these are allowed to say who the real client is (`X-Forwarded-For`), so the rate limits work per person instead of per proxy. |
 | `RECEIPT_CORS_ORIGIN` | no | Default `*`. Set it empty to send no CORS headers at all: the phone apps don't need them, only the browser version of the app does. Empty is right for a public server. |
 | `RECEIPT_GEMINI_MODEL`, `RECEIPT_SCAN_PROMPT`, `RECEIPT_AH_API` | no | Model name, prompt file and AH API base (for tests). |
@@ -116,7 +117,7 @@ What protects the server, and the settings that tune it:
 | Keys | Compared in constant time. Households made with `tenant add` get 256-bit random keys, stored only as a SHA-256 hash; a lost phone: `tenant rotate`. Wrong keys: 10 a minute per client address, then `429`. |
 | Isolation | One database and photo folder per household (see above). Data files are private to the server user (`0600` / `0700`). |
 | Limits | Per household (defaults, all adjustable): 120 requests and 5 scans a minute, optional scans per month. Request bodies at most 2 MB (photos 25 MB), at most 128 connections at once, 60 s socket timeout. |
-| Admin dashboard | A separate port, only reachable from this computer, with its own key (see below). Off unless you turn it on. |
+| Admin dashboard | A separate port, only reachable from your local network (private IPs, localhost, `.local`), with its own key (see below). Off unless you turn it on. |
 | Real client address | With a reverse proxy, set `RECEIPT_TRUSTED_PROXY` to the proxy's address; otherwise every visitor looks like the proxy. |
 | Web | No cookies (token in a header), so no CSRF. `RECEIPT_CORS_ORIGIN=` (empty) for a public server. Every response is `no-store` and `nosniff`; the server page has a strict CSP. |
 | Photos | Only image types are accepted, files are named by the server (`<id>.jpg`), and read back only through the household's own record. `RECEIPT_PHOTO_DAYS` deletes old ones. |

@@ -11,10 +11,10 @@ One server can also serve several separate households, each with its own key and
 Not affiliated with or endorsed by Albert Heijn or Google.
 
 ```
-receipt/
-├─ server/        Python server: data, receipt scanning (Gemini), optional Albert Heijn. No dependencies.
-├─ bonnetje/   Expo / React Native app (iOS and Android, also runs in the browser)
-└─ .github/       workflows (iOS + Android build and publish, server Docker image) and the download page
+bonnetje/
+├─ server/      Python server: data, receipt scanning (Gemini), optional Albert Heijn. No dependencies.
+├─ bonnetje/    Expo / React Native app (iOS and Android, also runs in the browser)
+└─ .github/     workflows (iOS + Android build and publish, server Docker image) and the download page
 ```
 
 ## Server

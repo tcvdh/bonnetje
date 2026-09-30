@@ -9,11 +9,12 @@ docker run -d --name bonnetje \
   --env-file .env \
   -v ./state:/data \
   -p 3000:3000 \
+  -p 3001:3001 \
   ghcr.io/tcvdh/bonnetje-server
 ```
 
-Or with Docker Compose — create `compose.yml` (the [`compose.yml`](compose.yml) in this folder is the same plus hardening
-and the admin port; use that one for a server other people use):
+Or with Docker Compose — create `compose.yml` (the [`compose.yml`](compose.yml) in this folder is the same plus hardening;
+use that one for a server other people use):
 
 ```yaml
 services:
