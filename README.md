@@ -10,6 +10,12 @@ One server can also serve several separate households, each with its own key and
 ([server/README.md](server/README.md#admin-dashboard)).
 Not affiliated with or endorsed by Albert Heijn or Google.
 
+<p align="center">
+  <img src="docs/screenshots/receipt-list.png" alt="Receipt list with balance overview" width="200">
+  <img src="docs/screenshots/receipt-detail.png" alt="Receipt detail with product split" width="200">
+  <img src="docs/screenshots/payment-qr.png" alt="Payment QR code" width="200">
+</p>
+
 ```
 bonnetje/
 ├─ server/      Python server: data, receipt scanning (Gemini), optional Albert Heijn. No dependencies.
