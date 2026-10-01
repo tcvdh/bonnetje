@@ -160,13 +160,14 @@ class Api:
             raise BadInput("Dit IBAN of deze naam is niet geldig.")
         iban = re.sub(r"\s+", "", str(payee.get("iban", ""))).upper()
         name = str(payee.get("name", "")).strip()[:70]
-        if not self.ctx.iban_valid(iban) or not name:
+        if (iban or name) and (not self.ctx.iban_valid(iban) or not name):  # IBAN and name go together
             raise BadInput("Dit IBAN of deze naam is niet geldig.")
         try:
             bunq = clean_bunq(payee.get("bunq"))
         except ValueError:
             raise BadInput("Deze bunq-naam is niet geldig.")
-        tenant.set_setting("payee", {"iban": iban, "name": name, **({"bunq": bunq} if bunq else {})})
+        new = {**({"iban": iban, "name": name} if iban else {}), **({"bunq": bunq} if bunq else {})}
+        tenant.set_setting("payee", new or None)
 
     def rotate(self, tid: str) -> dict:
         if tid == DEFAULT_ID:

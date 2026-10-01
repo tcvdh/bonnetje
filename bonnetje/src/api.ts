@@ -119,8 +119,9 @@ export function describeError(e: unknown): string {
 
 /** Where housemates pay. Set on the server (RECEIPT_IBAN / RECEIPT_NAME); older servers don't send it. */
 export interface Payee {
-  iban: string;
-  name: string;
+  /** With the name: the payment QR code. Both are missing when only a bunq link is set up. */
+  iban?: string;
+  name?: string;
   /** bunq.me handle; when set the payment sheet offers a shareable payment link. */
   bunq?: string;
 }
@@ -140,7 +141,7 @@ export function getPayee(): Payee | null {
 
 /** Remembers the payee from the server, so the QR code also works offline. */
 async function rememberPayee(status: ServerStatus) {
-  if (!status.payee?.iban || !status.payee.name) return;
+  if (!status.payee?.bunq && !(status.payee?.iban && status.payee.name)) return;
   payee = status.payee;
   try {
     await AsyncStorage.setItem(PAYEE_KEY, JSON.stringify(payee));

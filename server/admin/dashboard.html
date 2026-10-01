@@ -245,7 +245,7 @@ function editDialog(x) {
       field("Betaalaccount IBAN", "e-iban", payee ? payee.iban : "", { placeholder: x.builtin ? "leeg = RECEIPT_IBAN uit .env" : "NL00 BANK 0123 4567 89" }),
       field("Naam op de rekening", "e-payee", payee ? payee.name : "", { maxlength: "70" })),
     isNew ? null : h("div", { class: "row" },
-      field("bunq.me-naam (optioneel, voor een deelbare betaallink)", "e-bunq", payee ? payee.bunq || "" : "", { maxlength: "32", placeholder: x.builtin ? "leeg = RECEIPT_BUNQ uit .env (hier invullen vraagt ook IBAN en naam)" : "bijv. jouwnaam" })),
+      field("bunq.me-naam (optioneel)", "e-bunq", payee ? payee.bunq || "" : "", { maxlength: "32", placeholder: x.builtin ? "leeg = RECEIPT_BUNQ" : "jouwnaam" })),
     h("p", { class: "err", id: "e-err", role: "alert" }),
     h("div", { class: "foot" }, h("button", { class: "ghost", onclick: () => close(dlg) }, "Annuleren"), h("button", { id: "e-save" }, isNew ? "Aanmaken" : "Opslaan")),
 ].filter(Boolean));

@@ -125,6 +125,9 @@ class AdminTests(unittest.TestCase):
         self.assertEqual(server.payee(HH.tenant(tid))["bunq"], "some.one")
         body["payee"]["bunq"] = "no spaces/allowed"
         self.assertEqual(self.call("PUT", f"/api/households/{tid}", body)[0], 400)
+        self.assertEqual(self.call("PUT", f"/api/households/{tid}", {"payee": {"bunq": "only.bunq"}})[0], 200)
+        self.assertEqual(server.payee(HH.tenant(tid)), {"bunq": "only.bunq"})  # a link without a QR code is fine
+        self.assertEqual(self.call("PUT", f"/api/households/{tid}", {"payee": {"iban": "NL91ABNA0417164300"}})[0], 400)
         self.assertEqual(self.call("PUT", f"/api/households/{tid}", {"payee": None})[0], 200)
         self.assertIsNone(server.payee(HH.tenant(tid)))
 
@@ -137,6 +140,10 @@ class AdminTests(unittest.TestCase):
                        self.call("DELETE", "/api/households/default", {"confirm": "default"})[0],
                        self.call("PUT", "/api/households/default", {"disabled": True})[0]):
             self.assertEqual(status, 400)
+        # the dashboard's bunq name alone keeps the IBAN and name from .env
+        self.assertEqual(self.call("PUT", "/api/households/default", {"payee": {"bunq": "dash"}})[0], 200)
+        self.assertEqual(server.payee(HH.default())["bunq"], "dash")
+        self.assertTrue(server.payee(HH.default())["iban"])
         self.assertEqual(self.call("PUT", "/api/households/default", {"payee": None})[0], 200)
 
     def test_server_wide_limits_can_be_changed_and_reset(self):

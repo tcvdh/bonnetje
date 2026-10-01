@@ -42,16 +42,20 @@ export default function PaymentSheet({ visible, person, amount, invoiceNumber, o
 
       {payee ? (
         <>
-          <View style={s.qrContainer}>
-            <QRCode
-              value={buildEpcString(payee.iban, payee.name, amount, `Bonnetje Splitter ${invoiceNumber}`)}
-              size={196}
-              backgroundColor="#fff"
-            />
-          </View>
+          {payee.iban && payee.name ? (
+            <>
+              <View style={s.qrContainer}>
+                <QRCode
+                  value={buildEpcString(payee.iban, payee.name, amount, `Bonnetje Splitter ${invoiceNumber}`)}
+                  size={196}
+                  backgroundColor="#fff"
+                />
+              </View>
 
-          <Text style={s.hint}>Scan met je bankapp</Text>
-          <Text style={s.iban}>{payee.iban.replace(/(.{4})/g, "$1 ").trim()}</Text>
+              <Text style={s.hint}>Scan met je bankapp</Text>
+              <Text style={s.iban}>{payee.iban.replace(/(.{4})/g, "$1 ").trim()}</Text>
+            </>
+          ) : null}
           <View style={s.descRow}>
             <Text style={s.desc}>Bonnetje Splitter {invoiceNumber}</Text>
             <Pressable
@@ -76,7 +80,7 @@ export default function PaymentSheet({ visible, person, amount, invoiceNumber, o
         <View style={s.missing}>
           <Text style={s.missingTitle}>Betaalgegevens ontbreken</Text>
           <Text style={s.missingText}>
-            De server heeft geen rekeningnummer doorgegeven. Werk de server bij en stel RECEIPT_IBAN en RECEIPT_NAME in (zie de README van de server). Je kunt nu wel op Markeer als betaald tikken.
+            De server heeft geen rekeningnummer of bunq-naam doorgegeven. Werk de server bij en stel RECEIPT_IBAN en RECEIPT_NAME (of RECEIPT_BUNQ) in (zie de README van de server). Je kunt nu wel op Markeer als betaald tikken.
           </Text>
         </View>
       )}

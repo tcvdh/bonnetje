@@ -25,7 +25,7 @@ Stores in its data folder, on the machine where it runs:
 - scanned receipts and the original receipt photos;
 - per household, the payment details (the built-in household: `RECEIPT_IBAN` and `RECEIPT_NAME`), sent to the app to build
   the payment QR code;
-- per household, optionally a bunq.me handle (only to build a payment link the app can share);
+- per household, optionally a bunq.me handle (only to build a payment link the app can share; it can be used with or without an IBAN);
 - per household, when it last used the server and how many scans it used per month (for the limits and the admin
   dashboard), and a hash of its key (never the key itself);
 - only with `RECEIPT_USE_AH_API=true` (self-hosting): your Albert Heijn login tokens and a copy of your AH

@@ -499,8 +499,9 @@ USAGE = """Households (each has its own key and its own private data):
                                                     scans per week / requests per minute / scans per minute
                                                     (0 = unlimited, default = the server-wide value)
   python3 server.py tenant ah ID on|off|default     Albert Heijn integration for this household
-  python3 server.py tenant payee ID IBAN "Name" [BUNQ_HANDLE]
-                                                    where this household's housemates pay (bunq.me handle = optional share link)
+  python3 server.py tenant payee ID [IBAN "Name"] [--bunq HANDLE]
+                                                    where this household's housemates pay: IBAN + name (QR code),
+                                                    a bunq.me handle (share link), or both
   python3 server.py tenant delete ID --yes          delete the household and ALL its data
 With Docker:  docker exec -u bonnetje bonnetje python3 server.py tenant ...
 """
@@ -542,17 +543,27 @@ def cli(hh: Households, args: list[str], iban_valid) -> int:
             value = {"on": 1, "off": 0, "default": None}[args[2]]
             hh.update(args[1], ah_enabled=value)
             print("Done.")
-        elif cmd == "payee" and len(args) in (4, 5):
-            iban = re.sub(r"\s+", "", args[2]).upper()
-            if not iban_valid(iban):
-                print("That IBAN is not valid.", file=sys.stderr)
+        elif cmd == "payee" and len(args) >= 2:
+            rest = args[2:]
+            bunq = ""
+            if "--bunq" in rest:
+                i = rest.index("--bunq")
+                try:
+                    bunq = clean_bunq(rest[i + 1])
+                except (IndexError, ValueError):
+                    print("That bunq handle is not valid.", file=sys.stderr)
+                    return 1
+                rest = rest[:i] + rest[i + 2:]
+            if len(rest) not in (0, 2) or not (rest or bunq):
+                print(USAGE)
                 return 1
-            try:
-                bunq = clean_bunq(args[4]) if len(args) == 5 else ""
-            except ValueError:
-                print("That bunq handle is not valid.", file=sys.stderr)
-                return 1
-            payee = {"iban": iban, "name": args[3].strip()[:70]}
+            payee = {}
+            if rest:
+                iban = re.sub(r"\s+", "", rest[0]).upper()
+                if not iban_valid(iban):
+                    print("That IBAN is not valid.", file=sys.stderr)
+                    return 1
+                payee = {"iban": iban, "name": rest[1].strip()[:70]}
             if bunq:
                 payee["bunq"] = bunq
             hh.tenant(args[1]).set_setting("payee", payee)

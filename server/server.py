@@ -147,14 +147,20 @@ def iban_valid(iban: str) -> bool:
 
 
 def payee(tenant: Tenant) -> dict | None:
-    """The account for the payment QR code, or None when it isn't set up (or the IBAN is wrong).
-    A household's own (`tenant payee`) wins; the built-in household falls back to RECEIPT_IBAN / RECEIPT_NAME."""
-    own = tenant.get_setting("payee")
-    if own and iban_valid(own.get("iban", "")) and own.get("name"):
-        return {"iban": own["iban"], "name": own["name"], **({"bunq": own["bunq"]} if own.get("bunq") else {})}
-    if tenant.id == tenants.DEFAULT_ID and PAYEE_IBAN and PAYEE_NAME and iban_valid(PAYEE_IBAN):
-        return {"iban": PAYEE_IBAN, "name": PAYEE_NAME, **({"bunq": PAYEE_BUNQ} if PAYEE_BUNQ else {})}
-    return None
+    """Where housemates pay: the QR code needs {iban, name}, the share link a bunq handle; either alone is fine.
+    The two are chosen separately: a household's own value (`tenant payee`, dashboard) wins, and the built-in
+    household falls back to RECEIPT_IBAN + RECEIPT_NAME / RECEIPT_BUNQ. None when neither is set up."""
+    own = tenant.get_setting("payee") or {}
+    default = tenant.id == tenants.DEFAULT_ID
+    out = {}
+    if iban_valid(own.get("iban", "")) and own.get("name"):
+        out = {"iban": own["iban"], "name": own["name"]}
+    elif default and PAYEE_IBAN and PAYEE_NAME and iban_valid(PAYEE_IBAN):
+        out = {"iban": PAYEE_IBAN, "name": PAYEE_NAME}
+    bunq = own.get("bunq") or (PAYEE_BUNQ if default else "")
+    if bunq:
+        out["bunq"] = bunq
+    return out or None
 
 
 def init_db() -> None:
