@@ -171,14 +171,25 @@ jobs:
         run: |
           VERSION=$(node -p "require('./app.json').expo.version")
           TAG="v${VERSION}-build.${GITHUB_RUN_NUMBER}"
-          # Changelog: commits since the previous release tag (or all commits if first release)
+          # Changelog: commits since the previous release tag (or the last 20 if first release), each one
+          # linked and credited to its GitHub user, plus a link to the full comparison.
           PREV=$(gh release view --json tagName -q .tagName 2>/dev/null || true)
           if [ -n "$PREV" ] && git rev-parse "$PREV" >/dev/null 2>&1; then
-            NOTES=$(git log --pretty='- %s' "$PREV".."$GITHUB_SHA" -- ':!.github')
+            RANGE="$PREV..$GITHUB_SHA"
           else
-            NOTES=$(git log --pretty='- %s' -20 "$GITHUB_SHA" -- ':!.github')
+            PREV=""
+            RANGE="-20 $GITHUB_SHA"
           fi
+          NOTES=""
+          for sha in $(git log --format=%H $RANGE -- ':!.github'); do
+            who=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha" --jq '.author.login // empty' 2>/dev/null || true)
+            [ -z "$who" ] && who=$(git log -1 --format=%an "$sha") || who="@$who"
+            NOTES="$NOTES- $(git log -1 --format=%s "$sha") ([\`${sha:0:7}\`](https://github.com/$GITHUB_REPOSITORY/commit/$sha)) by $who
+"
+          done
           [ -z "$NOTES" ] && NOTES="No code changes (rebuild)."
+          [ -n "$PREV" ] && NOTES="$NOTES
+**Full changelog**: https://github.com/$GITHUB_REPOSITORY/compare/$PREV...$TAG"
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --title "v${VERSION} (build ${GITHUB_RUN_NUMBER})" \
             --notes "$NOTES" --target "$GITHUB_SHA"
