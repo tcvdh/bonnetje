@@ -3,6 +3,7 @@ import {
   activeTotal,
   buildInvoice,
   invoiceText,
+  paymentRequestText,
   nextInvoiceNumber,
   pendingReceiptIds,
   reserveNumber,
@@ -176,5 +177,27 @@ describe("invoiceText", () => {
     expect(text).toContain("Afrekening 2026-001");
     expect(text).toContain("Melk: €2,00");
     expect(text).toContain("Totaal: €2,00");
+  });
+});
+
+describe("paymentRequestText", () => {
+  const inv = invoice("2026-002", {
+    person: "Sam",
+    total: 3,
+    receipts: [{ receiptId: "a", store: "AH", dateTime: "2026-03-01T10:00:00", subtotal: 3, lines: [{ name: "Melk", quantity: 2, share: 0.5, amount: 3 }] }],
+  });
+
+  it("lists the products and the link, and never says it is paid", () => {
+    const text = paymentRequestText(inv, "https://bunq.me/x/3.00/Test");
+    expect(text).toContain("Afrekening 2026-002");
+    expect(text).toContain("2x Melk (50%): €3,00");
+    expect(text).toContain("Totaal: €3,00");
+    expect(text).toContain("https://bunq.me/x/3.00/Test");
+    expect(text).not.toMatch(/betaald op|ingetrokken/);
+  });
+
+  it("matches the paid text apart from the paid line", () => {
+    expect(invoiceText(inv)).toContain("betaald op");
+    expect(paymentRequestText(inv, "l")).not.toContain("betaald op");
   });
 });

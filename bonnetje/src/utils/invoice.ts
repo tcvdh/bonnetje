@@ -150,6 +150,23 @@ export function invoiceText(inv: Invoice): string {
     `Afrekening ${inv.number}`,
     `${inv.person}, betaald op ${formatPaidAt(inv.paidAt)}`,
   ];
+  pushReceipts(out, inv);
+  out.push("", `Totaal: ${eur(activeTotal(inv))}`);
+  return out.join("\n");
+}
+
+/**
+ * The same list for an invoice that is not paid yet, to send with a payment link: it never says "betaald",
+ * and has no paid date. Build `inv` with `buildInvoice`, so the lines and the total are what the QR code asks for.
+ */
+export function paymentRequestText(inv: Invoice, link: string): string {
+  const out: string[] = [`Afrekening ${inv.number}`, inv.person];
+  pushReceipts(out, inv);
+  out.push("", `Totaal: ${eur(inv.total)}`, "", `Betalen kan hier: ${link}`);
+  return out.join("\n");
+}
+
+function pushReceipts(out: string[], inv: Invoice) {
   inv.receipts.forEach((r) => {
     out.push("", `${r.store}, ${dateShort(r.dateTime)}${r.voidedAt ? `, betaling ingetrokken op ${formatPaidAt(r.voidedAt)}` : ""}`);
     r.lines.forEach((l) => {
@@ -159,6 +176,4 @@ export function invoiceText(inv: Invoice): string {
     });
     if (inv.receipts.length > 1) out.push(`  Subtotaal: ${eur(r.subtotal)}`);
   });
-  out.push("", `Totaal: ${eur(activeTotal(inv))}`);
-  return out.join("\n");
 }

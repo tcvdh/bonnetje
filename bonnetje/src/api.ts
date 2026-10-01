@@ -180,6 +180,21 @@ export async function getReceipt(id: string): Promise<ReceiptDetail | null> {
   }
 }
 
+/** Details of several receipts for an invoice; one that can't be loaded is null (the invoice then says "Product n"). */
+export async function getReceiptDetails(ids: string[]): Promise<Record<string, ReceiptDetail | null>> {
+  const details: Record<string, ReceiptDetail | null> = {};
+  await Promise.all(
+    ids.map(async (id) => {
+      try {
+        details[id] = await getReceipt(id);
+      } catch {
+        details[id] = null;
+      }
+    })
+  );
+  return details;
+}
+
 // ── Receipt scanning (photo -> Gemini on the server) ──
 
 export type ScanOutcome =

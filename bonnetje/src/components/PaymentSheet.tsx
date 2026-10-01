@@ -2,9 +2,11 @@ import React, { useEffect, useState } from "react";
 import { View, Text, Pressable, Share, StyleSheet } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { PersonName } from "../constants";
-import { getAuthStatus, getPayee, Payee } from "../api";
+import { getAuthStatus, getPayee, getReceiptDetails, Payee } from "../api";
+import { useAppData } from "../context";
 import { colors, mono, radius, eur } from "../theme";
 import { bunqLink } from "../utils/bunq";
+import { buildInvoice, paymentRequestText, pendingReceiptIds } from "../utils/invoice";
 import Perforation from "./Perforation";
 import { CardDialog } from "./Sheet";
 
@@ -25,7 +27,19 @@ function buildEpcString(iban: string, name: string, amount: number, desc: string
 }
 
 export default function PaymentSheet({ visible, person, amount, invoiceNumber, onRefreshNumber, onPaid, onClose }: Props) {
+  const { data, receipts } = useAppData();
   const [payee, setPayee] = useState<Payee | null>(getPayee());
+
+  /** The bunq link with what they are paying for (an unpaid invoice of the same receipts as the QR code). */
+  async function shareLink() {
+    if (!payee?.bunq || !person) return;
+    const desc = `Bonnetje Splitter ${invoiceNumber}`;
+    const link = bunqLink(payee.bunq, amount, desc);
+    const ids = pendingReceiptIds(person, data);
+    const details = await getReceiptDetails(ids);
+    const invoice = buildInvoice({ person, receiptIds: ids, data, receipts, details, now: new Date(), scope: "all" });
+    Share.share({ message: paymentRequestText(invoice, link) }).catch(() => {});
+  }
 
   // The server sends the account. If it hasn't yet (or the server is older), ask again when the sheet opens.
   useEffect(() => {
@@ -70,7 +84,7 @@ export default function PaymentSheet({ visible, person, amount, invoiceNumber, o
           {payee.bunq ? (
             <Pressable
               style={({ pressed }) => [s.shareBtn, pressed && s.pressed]}
-              onPress={() => Share.share({ message: bunqLink(payee.bunq!, amount, `Bonnetje Splitter ${invoiceNumber}`) }).catch(() => {})}
+              onPress={shareLink}
             >
               <Text style={s.shareText}>Deel bunq-betaallink</Text>
             </Pressable>

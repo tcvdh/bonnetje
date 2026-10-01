@@ -1,4 +1,4 @@
-import { getReceipt } from "../api";
+import { getReceiptDetails } from "../api";
 import { useAppData } from "../context";
 import { PersonName } from "../constants";
 import { Invoice } from "../types";
@@ -15,16 +15,7 @@ export function useMarkAllPaid(onInvoice: (invoice: Invoice) => void) {
     const ids = pendingReceiptIds(person, data);
     if (!ids.length) return;
 
-    const details: Record<string, Awaited<ReturnType<typeof getReceipt>>> = {};
-    await Promise.all(
-      ids.map(async (id) => {
-        try {
-          details[id] = await getReceipt(id);
-        } catch {
-          details[id] = null; // the invoice falls back to "Product n" instead of blocking the payment
-        }
-      })
-    );
+    const details = await getReceiptDetails(ids); // a failed one falls back to "Product n" instead of blocking the payment
 
     const invoice = buildInvoice({ person, receiptIds: ids, data, receipts, details, now: new Date(), scope: "all" });
     const paid = { ...data.paid };

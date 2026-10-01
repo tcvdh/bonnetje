@@ -41,7 +41,7 @@ Nothing is sent anywhere else, except:
   How Google handles it depends on the key's plan (on the free tier Google may use content to improve its
   products, on a paid key not); check [Google's Gemini API terms](https://ai.google.dev/gemini-api/terms).
   Without a Gemini key nothing is sent to Google.
-- **bunq** (only if you set a bunq.me handle): the app never contacts bunq. "Deel bunq-betaallink" only hands a `bunq.me` link (your handle, amount and invoice number) to the share sheet; whoever opens it talks to bunq.
+- **bunq** (only if you set a bunq.me handle): the app never contacts bunq. "Deel bunq-betaallink" only hands a message (the person's products and total, plus a `bunq.me` link with your handle, amount and invoice number) to the share sheet; whoever opens it talks to bunq.
 - **Albert Heijn** (only with `RECEIPT_USE_AH_API=true`): the server talks to Albert Heijn as you, to fetch
   your own receipts.
 
