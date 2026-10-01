@@ -33,7 +33,7 @@ cd server && python3 server.py tenant list                       # manage househ
 - Keep the server standard-library only (no pip dependencies).
 - Releases: GitHub Actions workflow `.github/workflows/build.yml` builds the IPA and APK (per platform: skip, GitHub-hosted, or self-hosted `my-pc` / `my-mac`); an IPA build also rewrites `altstore.json`. Version lives in `bonnetje/app.json` (`expo.version`).
 - Money is whole cents, computed in `bonnetje/src/utils/settle.ts` only. Never sum euro floats or add another way to compute a person's total; use `shareCents` / `receiptCents` (see `bonnetje/AGENTS.md`). Stored assignments hold integer `cents`, not euros.
-- Nothing personal in the source: the payment IBAN and name are server settings (the built-in household: `RECEIPT_IBAN`, `RECEIPT_NAME`; other households: `tenant payee` or the dashboard), sent to the app in `/api/auth/status`.
+- Nothing personal in the source: the payment IBAN, name and optional bunq.me handle are server settings (the built-in household: `RECEIPT_IBAN`, `RECEIPT_NAME`, `RECEIPT_BUNQ`; other households: `tenant payee` or the dashboard), sent to the app in `/api/auth/status`.
 - Docs must match the code: when you change a setting, endpoint, command or the money rules, update `README.md`, `server/README.md`, `server/DEPLOY.md`, `server/.env.example` and the AGENTS/CLAUDE files in the same change.
 
 ## Git

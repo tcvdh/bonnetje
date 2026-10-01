@@ -31,11 +31,11 @@ export default function BalanceCard({ data, onPayPress, onPaidPress }: Props) {
           <Perforation dotted style={s.leader} />
           <Text style={[s.amount, { color: personColor(p).fg }]}>{eur(owed[p] / 100)}</Text>
           <Pressable
-            accessibilityLabel={`QR-code voor ${p}`}
+            accessibilityLabel={`Betaalgegevens voor ${p}`}
             style={({ pressed }) => [s.btn, pressed && s.btnPressed]}
             onPress={() => onPayPress(p, owed[p] / 100)}
           >
-            <Text style={s.btnText}>QR</Text>
+            <Text style={s.btnText}>💶</Text>
           </Pressable>
           <Pressable
             accessibilityLabel={`${p} heeft betaald`}

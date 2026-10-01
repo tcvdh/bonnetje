@@ -31,6 +31,7 @@ All settings are environment variables (passed via `--env-file` with Docker, or 
 | Variable | Needed | What it does |
 |---|---|---|
 | `RECEIPT_APP_KEY` | yes, unless you only use [households](#households-more-than-one-group) | The password of your server (the built-in household): the app sends it as `Authorization: Bearer <key>`. Any text works (no minimum length), but a long random one is safer: `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'`. `run.sh` generates one on first run. |
+| `RECEIPT_BUNQ` | optional | bunq.me handle of the built-in household. The payment screen then also offers "Deel bunq-betaallink" (`https://bunq.me/<handle>/<amount>/<description>`). Other households: `tenant payee` or the dashboard. |
 | `RECEIPT_IBAN`, `RECEIPT_NAME` | for the payment QR code | The account of the built-in household, where its housemates pay. The server checks the IBAN and sends both to the app. Without them the app shows "Betaalgegevens ontbreken" instead of a QR code. Other households get theirs with `tenant payee`. |
 | `RECEIPT_GEMINI_KEY` | for scanning | Gemini API key; without it, scanning is off. See the privacy note under [Scanning receipts](#scanning-receipts-gemini). |
 | `RECEIPT_USE_AH_API` | no | Default `false`. `true` switches on the unofficial Albert Heijn integration. **Self-hosting only**, see [below](#albert-heijn-optional). |
@@ -79,7 +80,7 @@ is stored on the server.
 | `rotate ID` | new key; the old one stops working at once |
 | `revoke ID` / `enable ID` | switch a household off / on again (its data stays) |
 | `limit ID week\|requests\|rate N` | that household's own limit: scans per week / requests per minute / scans per minute (`0` = unlimited); `N` = `default` goes back to the server-wide value |
-| `payee ID IBAN "Name"` | where that household's housemates pay (the built-in one uses `RECEIPT_IBAN` / `RECEIPT_NAME`) |
+| `payee ID IBAN "Name" [BUNQ_HANDLE]` | where that household's housemates pay, plus an optional bunq.me handle for a share link (the built-in one uses `RECEIPT_IBAN` / `RECEIPT_NAME` / `RECEIPT_BUNQ`) |
 | `delete ID --yes` | delete the household and **all** its data, photos included |
 
 Good to know:
@@ -265,7 +266,7 @@ Every key belongs to one household and only sees that household's data. Errors: 
 | Method | Path | |
 |---|---|---|
 | GET | `/api/health` | liveness, `{ok, ahEnabled}` (no key needed) |
-| GET | `/api/auth/status` | `ahEnabled`, AH login state, `loginUrl` (`null` when AH is off), `scanEnabled`, and `payee` (`{iban, name}` or `null` when not set up) |
+| GET | `/api/auth/status` | `ahEnabled`, AH login state, `loginUrl` (`null` when AH is off), `scanEnabled`, and `payee` (`{iban, name, bunq?}` or `null` when not set up) |
 | POST | `/api/auth/begin` | AH only: start a login, opens a 10-minute window in which one code is accepted (`404 ah_disabled` when AH is off) |
 | POST | `/api/auth/exchange` `{code}` | AH only: finish the login (accepts the code, or the whole `appie://…?code=` URL); `409` if no login was started, so a foreign `appie://` link can't switch the server to someone else's account |
 | POST | `/api/auth/logout` | AH only: forget AH tokens |

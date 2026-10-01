@@ -244,6 +244,8 @@ function editDialog(x) {
     isNew ? null : h("div", { class: "row" },
       field("Betaalaccount IBAN", "e-iban", payee ? payee.iban : "", { placeholder: x.builtin ? "leeg = RECEIPT_IBAN uit .env" : "NL00 BANK 0123 4567 89" }),
       field("Naam op de rekening", "e-payee", payee ? payee.name : "", { maxlength: "70" })),
+    isNew ? null : h("div", { class: "row" },
+      field("bunq.me-naam (optioneel, voor een deelbare betaallink)", "e-bunq", payee ? payee.bunq || "" : "", { maxlength: "32", placeholder: x.builtin ? "leeg = RECEIPT_BUNQ uit .env (hier invullen vraagt ook IBAN en naam)" : "bijv. jouwnaam" })),
     h("p", { class: "err", id: "e-err", role: "alert" }),
     h("div", { class: "foot" }, h("button", { class: "ghost", onclick: () => close(dlg) }, "Annuleren"), h("button", { id: "e-save" }, isNew ? "Aanmaken" : "Opslaan")),
 ].filter(Boolean));
@@ -263,8 +265,8 @@ function editDialog(x) {
         Object.assign(body, { name: $("#e-name").value, week: numOrNull("e-week"), requests: numOrNull("e-requests"), rate: numOrNull("e-rate") });
         if (ahVal !== undefined) body.ahEnabled = ahVal;
       }
-      const iban = $("#e-iban").value.trim(), pname = $("#e-payee").value.trim();
-      if (iban || pname) body.payee = { iban, name: pname }; else if (payee) body.payee = null;
+      const iban = $("#e-iban").value.trim(), pname = $("#e-payee").value.trim(), bunq = $("#e-bunq").value.trim();
+      if (iban || pname || bunq) body.payee = { iban, name: pname, bunq }; else if (payee) body.payee = null;
       await api("PUT", "/api/households/" + x.id, body);
       close(dlg); await load();
     } catch (e) { $("#e-err").textContent = e.message; }

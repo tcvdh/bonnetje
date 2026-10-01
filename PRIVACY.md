@@ -25,6 +25,7 @@ Stores in its data folder, on the machine where it runs:
 - scanned receipts and the original receipt photos;
 - per household, the payment details (the built-in household: `RECEIPT_IBAN` and `RECEIPT_NAME`), sent to the app to build
   the payment QR code;
+- per household, optionally a bunq.me handle (only to build a payment link the app can share);
 - per household, when it last used the server and how many scans it used per month (for the limits and the admin
   dashboard), and a hash of its key (never the key itself);
 - only with `RECEIPT_USE_AH_API=true` (self-hosting): your Albert Heijn login tokens and a copy of your AH
@@ -40,6 +41,7 @@ Nothing is sent anywhere else, except:
   How Google handles it depends on the key's plan (on the free tier Google may use content to improve its
   products, on a paid key not); check [Google's Gemini API terms](https://ai.google.dev/gemini-api/terms).
   Without a Gemini key nothing is sent to Google.
+- **bunq** (only if you set a bunq.me handle): the app never contacts bunq. "Deel bunq-betaallink" only hands a `bunq.me` link (your handle, amount and invoice number) to the share sheet; whoever opens it talks to bunq.
 - **Albert Heijn** (only with `RECEIPT_USE_AH_API=true`): the server talks to Albert Heijn as you, to fetch
   your own receipts.
 

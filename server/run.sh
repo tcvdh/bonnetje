@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 
 if [ ! -f .env ]; then
   key=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
-  (umask 077; printf 'RECEIPT_APP_KEY=%s\nRECEIPT_PORT=3000\n# RECEIPT_GEMINI_KEY=   # add your Gemini key here to enable receipt scanning\n# RECEIPT_IBAN=       # your IBAN, for the payment QR code\n# RECEIPT_NAME=       # the name on that account\n# RECEIPT_USE_AH_API=true   # Albert Heijn integration (self-hosting only, see README)\n# RECEIPT_ADMIN_PORT=3001   # local admin dashboard, together with RECEIPT_ADMIN_KEY=...\n' "$key" > .env)
+  (umask 077; printf 'RECEIPT_APP_KEY=%s\nRECEIPT_PORT=3000\n# RECEIPT_GEMINI_KEY=   # add your Gemini key here to enable receipt scanning\n# RECEIPT_IBAN=       # your IBAN, for the payment QR code\n# RECEIPT_NAME=       # the name on that account\n# RECEIPT_BUNQ=       # optional bunq.me handle, for a shareable payment link\n# RECEIPT_USE_AH_API=true   # Albert Heijn integration (self-hosting only, see README)\n# RECEIPT_ADMIN_PORT=3001   # local admin dashboard, together with RECEIPT_ADMIN_KEY=...\n' "$key" > .env)
   echo "Created .env with a new app key."
 fi
 

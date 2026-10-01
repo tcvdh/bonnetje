@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, Share, StyleSheet } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { PersonName } from "../constants";
 import { getAuthStatus, getPayee, Payee } from "../api";
 import { colors, mono, radius, eur } from "../theme";
+import { bunqLink } from "../utils/bunq";
 import Perforation from "./Perforation";
 import { CardDialog } from "./Sheet";
 
@@ -62,6 +63,14 @@ export default function PaymentSheet({ visible, person, amount, invoiceNumber, o
               <Text style={s.refreshText}>↻</Text>
             </Pressable>
           </View>
+          {payee.bunq ? (
+            <Pressable
+              style={({ pressed }) => [s.shareBtn, pressed && s.pressed]}
+              onPress={() => Share.share({ message: bunqLink(payee.bunq!, amount, `Bonnetje Splitter ${invoiceNumber}`) }).catch(() => {})}
+            >
+              <Text style={s.shareText}>Deel bunq-betaallink</Text>
+            </Pressable>
+          ) : null}
         </>
       ) : (
         <View style={s.missing}>
@@ -101,6 +110,8 @@ const s = StyleSheet.create({
   refreshText: { color: colors.sub, fontSize: 15, lineHeight: 18 },
   actions: { width: "100%", gap: 8 },
   pressed: { opacity: 0.7 },
+  shareBtn: { marginTop: 12, paddingVertical: 10, paddingHorizontal: 16, borderRadius: radius.md, backgroundColor: colors.raised },
+  shareText: { color: colors.text, fontSize: 14, fontWeight: "600" },
   paidBtn: { backgroundColor: colors.accent, padding: 14, borderRadius: radius.md, alignItems: "center" },
   paidText: { color: colors.accentInk, fontSize: 15, fontWeight: "700" },
   closeBtn: { padding: 12, borderRadius: radius.md, alignItems: "center" },

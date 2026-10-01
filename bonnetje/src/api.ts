@@ -121,6 +121,8 @@ export function describeError(e: unknown): string {
 export interface Payee {
   iban: string;
   name: string;
+  /** bunq.me handle; when set the payment sheet offers a shareable payment link. */
+  bunq?: string;
 }
 
 export interface ServerStatus {

@@ -23,6 +23,7 @@ Configure with environment variables:
   RECEIPT_SCAN_PROMPT   path to the scan prompt (default ./scan_prompt.txt)
   RECEIPT_IBAN      the IBAN of the built-in household, where housemates pay (payment QR code in the app)
   RECEIPT_NAME      the name on that account
+  RECEIPT_BUNQ      optional bunq.me handle: the app then also offers a shareable bunq.me payment link
   RECEIPT_REQUESTS_PER_MINUTE  default 120: requests per minute per household (0 = unlimited)
   RECEIPT_SCANS_PER_MINUTE     default 5: Gemini scans per minute per household (0 = unlimited)
   RECEIPT_SCANS_PER_WEEK   default 25: Gemini scans per week for households from `tenant add` (0 = unlimited)
@@ -64,6 +65,10 @@ USE_AH_API = os.environ.get("RECEIPT_USE_AH_API", "").strip().lower() in ("1", "
 AH_API = os.environ.get("RECEIPT_AH_API", "https://api.ah.nl").rstrip("/")
 PAYEE_IBAN = re.sub(r"\s+", "", os.environ.get("RECEIPT_IBAN", "")).upper()
 PAYEE_NAME = os.environ.get("RECEIPT_NAME", "").strip().strip("\"'").strip()[:70]
+try:
+    PAYEE_BUNQ = tenants.clean_bunq(os.environ.get("RECEIPT_BUNQ", "").strip().strip("\"'"))
+except ValueError:
+    PAYEE_BUNQ = ""
 # (quotes are stripped because `docker run --env-file` keeps them; an EPC QR code allows 70 characters)
 STATIC_DIR = Path(__file__).parent / "static"
 ADMIN_HOST = os.environ.get("RECEIPT_ADMIN_HOST", "127.0.0.1")
@@ -145,9 +150,9 @@ def payee(tenant: Tenant) -> dict | None:
     A household's own (`tenant payee`) wins; the built-in household falls back to RECEIPT_IBAN / RECEIPT_NAME."""
     own = tenant.get_setting("payee")
     if own and iban_valid(own.get("iban", "")) and own.get("name"):
-        return {"iban": own["iban"], "name": own["name"]}
+        return {"iban": own["iban"], "name": own["name"], **({"bunq": own["bunq"]} if own.get("bunq") else {})}
     if tenant.id == tenants.DEFAULT_ID and PAYEE_IBAN and PAYEE_NAME and iban_valid(PAYEE_IBAN):
-        return {"iban": PAYEE_IBAN, "name": PAYEE_NAME}
+        return {"iban": PAYEE_IBAN, "name": PAYEE_NAME, **({"bunq": PAYEE_BUNQ} if PAYEE_BUNQ else {})}
     return None
 
 

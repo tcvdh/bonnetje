@@ -48,6 +48,7 @@ RECEIPT_GEMINI_KEY=your-gemini-key
 | Variable | Needed | What it does |
 |---|---|---|
 | `RECEIPT_APP_KEY` | yes, unless you only use households | The server's password (the built-in household); the app sends it. Any text works, a long random one is safer: `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'` |
+| `RECEIPT_BUNQ` | optional | bunq.me handle: adds a shareable bunq payment link next to the QR code. |
 | `RECEIPT_IBAN`, `RECEIPT_NAME` | for payment QR | Where housemates pay. Without them the app shows a warning instead of a QR code. |
 | `RECEIPT_GEMINI_KEY` | for scanning | Gemini API key; without it, photo scanning is off. Photos are sent to Google (privacy note in [README.md](README.md#scanning-receipts-gemini)). |
 | `RECEIPT_REQUESTS_PER_MINUTE`, `RECEIPT_SCANS_PER_MINUTE`, `RECEIPT_SCANS_PER_WEEK`, `RECEIPT_PHOTO_DAYS`, `RECEIPT_TRUSTED_PROXY`, `RECEIPT_CORS_ORIGIN` | no | Limits and privacy settings for a server that other people use (see [README.md](README.md#settings)). |

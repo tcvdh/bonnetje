@@ -120,6 +120,11 @@ class AdminTests(unittest.TestCase):
         body = {"payee": {"iban": "nl91 abna 0417 1643 00", "name": "Pay Household"}}
         self.assertEqual(self.call("PUT", f"/api/households/{tid}", body)[0], 200)
         self.assertEqual(server.payee(HH.tenant(tid)), {"iban": "NL91ABNA0417164300", "name": "Pay Household"})
+        body["payee"]["bunq"] = " https://bunq.me/some.one/ "
+        self.assertEqual(self.call("PUT", f"/api/households/{tid}", body)[0], 200)
+        self.assertEqual(server.payee(HH.tenant(tid))["bunq"], "some.one")
+        body["payee"]["bunq"] = "no spaces/allowed"
+        self.assertEqual(self.call("PUT", f"/api/households/{tid}", body)[0], 400)
         self.assertEqual(self.call("PUT", f"/api/households/{tid}", {"payee": None})[0], 200)
         self.assertIsNone(server.payee(HH.tenant(tid)))
 

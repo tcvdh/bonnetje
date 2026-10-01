@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from limiter import Limiter
-from tenants import DEFAULT_ID, ID_RE
+from tenants import DEFAULT_ID, ID_RE, clean_bunq
 
 log = logging.getLogger("receipt.admin")
 
@@ -162,7 +162,11 @@ class Api:
         name = str(payee.get("name", "")).strip()[:70]
         if not self.ctx.iban_valid(iban) or not name:
             raise BadInput("Dit IBAN of deze naam is niet geldig.")
-        tenant.set_setting("payee", {"iban": iban, "name": name})
+        try:
+            bunq = clean_bunq(payee.get("bunq"))
+        except ValueError:
+            raise BadInput("Deze bunq-naam is niet geldig.")
+        tenant.set_setting("payee", {"iban": iban, "name": name, **({"bunq": bunq} if bunq else {})})
 
     def rotate(self, tid: str) -> dict:
         if tid == DEFAULT_ID:
