@@ -180,16 +180,15 @@ jobs:
             PREV=""
             RANGE="-20 $GITHUB_SHA"
           fi
+          NL=$'\n'
           NOTES=""
-          for sha in $(git log --format=%H $RANGE -- ':!.github'); do
+          for sha in $(git log --format=%H --invert-grep --grep='^Bump version' $RANGE -- ':!.github'); do
             who=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha" --jq '.author.login // empty' 2>/dev/null || true)
             [ -z "$who" ] && who=$(git log -1 --format=%an "$sha") || who="@$who"
-            NOTES="$NOTES- $(git log -1 --format=%s "$sha") ([\`${sha:0:7}\`](https://github.com/$GITHUB_REPOSITORY/commit/$sha)) by $who
-"
+            NOTES="$NOTES- $(git log -1 --format=%s "$sha") ([\`${sha:0:7}\`](https://github.com/$GITHUB_REPOSITORY/commit/$sha)) by $who$NL"
           done
           [ -z "$NOTES" ] && NOTES="No code changes (rebuild)."
-          [ -n "$PREV" ] && NOTES="$NOTES
-**Full changelog**: https://github.com/$GITHUB_REPOSITORY/compare/$PREV...$TAG"
+          [ -n "$PREV" ] && NOTES="$NOTES$NL**Full changelog**: https://github.com/$GITHUB_REPOSITORY/compare/$PREV...$TAG"
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --title "v${VERSION} (build ${GITHUB_RUN_NUMBER})" \
             --notes "$NOTES" --target "$GITHUB_SHA"
