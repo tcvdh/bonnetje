@@ -41,6 +41,7 @@ import json
 import logging
 import os
 import re
+import signal
 import sys
 import threading
 from types import SimpleNamespace
@@ -703,6 +704,8 @@ def main() -> None:
         ))
         log.info("Admin dashboard on http://%s:%s", ADMIN_HOST, ADMIN_PORT)
     log.info("Listening on http://%s:%s (data: %s)", HOST, PORT, DATA_DIR)
+    # As PID 1 in Docker, Python ignores SIGTERM unless it has a handler: `docker stop` would wait 10 s, then kill.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     Server((HOST, PORT), Handler).serve_forever()
 
 
