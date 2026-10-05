@@ -18,6 +18,7 @@ os.environ.setdefault("RECEIPT_IBAN", "nl91 abna 0417 1643 00")  # same values a
 os.environ.setdefault("RECEIPT_NAME", "Test Person")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import scanning  # noqa: E402
 import server  # noqa: E402
 import tenants  # noqa: E402
 
@@ -243,11 +244,31 @@ class HttpTests(unittest.TestCase):
         self.assertEqual((status, body["error"]), (429, "scan_quota"))
         self.assertEqual(list(limited.scan_dir.iterdir()), [])  # nothing was kept
 
-    def test_a_failed_scan_is_not_counted(self):
+    def test_only_scans_gemini_answered_count(self):
         tenant, key = HH.add("Failed scan")
-        status, body = self.call("POST", "/api/scans", {"image": "aGk=", "mimeType": "image/jpeg"}, key=key)
-        self.assertEqual((status, body["error"]), (503, "gemini_not_configured"))
+        photo = {"image": "aGk=", "mimeType": "image/jpeg"}
+        status, body = self.call("POST", "/api/scans", photo, key=key)
+        self.assertEqual((status, body["error"]), (503, "gemini_not_configured"))  # the server's fault: free
         self.assertEqual(HH.scans_this_week(tenant.id), 0)
+        original = scanning.call_gemini
+        scanning.call_gemini = lambda image, mime: {"isReceipt": False, "problem": "a cat"}
+        try:
+            status, body = self.call("POST", "/api/scans", photo, key=key)
+        finally:
+            scanning.call_gemini = original
+        self.assertEqual((status, body["error"]), (422, "not_a_receipt"))  # Gemini read it: counts
+        self.assertEqual(HH.scans_this_week(tenant.id), 1)
+        self.assertEqual(list(tenant.scan_dir.iterdir()), [])  # and nothing was kept
+
+    def test_one_scan_at_a_time_per_household(self):
+        self.a.scan_lock.acquire()
+        try:
+            status, body = self.call("POST", "/api/scans", {"image": "aGk=", "mimeType": "image/jpeg"}, key=self.key_a)
+            self.assertEqual((status, body["error"]), (429, "scan_busy"))
+            status, body = self.call("POST", "/api/scans", {"image": "aGk=", "mimeType": "image/jpeg"}, key=self.key_b)
+            self.assertEqual(body["error"], "gemini_not_configured")  # another household is not held up
+        finally:
+            self.a.scan_lock.release()
 
     def test_cli_payee_keeps_what_you_leave_out(self):
         tenant, _ = HH.add("Payee CLI")

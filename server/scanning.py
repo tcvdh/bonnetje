@@ -23,11 +23,12 @@ TOLERANCE = 0.02  # euro; receipts round per line
 
 
 class ScanError(Exception):
-    """A failure the user should see. `code` is machine readable, `message` is Dutch."""
+    """A failure the user should see. `code` is machine readable, `message` is Dutch. `answered` is True when
+    Gemini did read the photo (it cost a call), e.g. "not a receipt"; False when the server or Gemini failed."""
 
-    def __init__(self, code: str, message: str, status: int = 502):
+    def __init__(self, code: str, message: str, status: int = 502, answered: bool = False):
         super().__init__(message)
-        self.code, self.message, self.status = code, message, status
+        self.code, self.message, self.status, self.answered = code, message, status, answered
 
 
 # ── Structured output schema ─────────────────────────────────────────────
@@ -133,16 +134,22 @@ def call_gemini(image: bytes, mime_type: str) -> dict:
     candidates = payload.get("candidates") or []
     if not candidates:
         reason = (payload.get("promptFeedback") or {}).get("blockReason", "")
-        raise ScanError("gemini_blocked", f"Gemini gaf geen antwoord voor deze foto{f' ({reason})' if reason else ''}.", 502)
+        raise ScanError("gemini_blocked", f"Gemini gaf geen antwoord voor deze foto{f' ({reason})' if reason else ''}.", 502,
+                        answered=True)
     cand = candidates[0]
     parts = (cand.get("content") or {}).get("parts") or []
     text = "".join(p.get("text", "") for p in parts)
     try:
-        return json.loads(text)
+        result = json.loads(text)
     except json.JSONDecodeError:
         if cand.get("finishReason") == "MAX_TOKENS":
-            raise ScanError("gemini_truncated", "Het bonnetje is te lang om in één keer te lezen. Scan het in twee delen.", 502)
-        raise ScanError("gemini_bad_output", "Gemini gaf een antwoord dat niet te lezen was. Probeer het opnieuw.", 502)
+            raise ScanError("gemini_truncated", "Het bonnetje is te lang om in één keer te lezen. Scan het in twee delen.", 502,
+                            answered=True)
+        result = None
+    if not isinstance(result, dict):
+        raise ScanError("gemini_bad_output", "Gemini gaf een antwoord dat niet te lezen was. Probeer het opnieuw.", 502,
+                        answered=True)
+    return result
 
 
 # ── Validation ───────────────────────────────────────────────────────────
@@ -264,9 +271,10 @@ def scan_image(image: bytes, mime_type: str) -> tuple[dict, list[str], list[str]
     scan = clean(call_gemini(image, mime_type))
     if not scan["isReceipt"]:
         why = scan["problem"] or "Dit lijkt geen bonnetje, of de foto is te onduidelijk."
-        raise ScanError("not_a_receipt", f"Kan het bonnetje niet lezen: {why}", 422)
+        raise ScanError("not_a_receipt", f"Kan het bonnetje niet lezen: {why}", 422, answered=True)
     if not scan["items"]:
-        raise ScanError("no_items", "Ik zie geen producten op deze foto. Zorg dat het hele bonnetje in beeld is.", 422)
+        raise ScanError("no_items", "Ik zie geen producten op deze foto. Zorg dat het hele bonnetje in beeld is.", 422,
+                        answered=True)
     issues, warnings = validate(scan)
     return scan, issues, warnings
 

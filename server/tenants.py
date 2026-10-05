@@ -60,6 +60,7 @@ class Tenant:
         self.scan_rate: int | None = None      # scans per minute
         self.ah_enabled: bool | None = None    # None = follow global USE_AH_API
         self.auth_lock = threading.Lock()  # Albert Heijn token refresh
+        self.scan_lock = threading.Lock()  # one scan at a time (server.scan_slot)
         self._login_lock = threading.Lock()
         self._login_open_until = 0.0
 
@@ -464,14 +465,12 @@ class Households:
 
     def scans_left(self, tenant: Tenant, default_limit: int) -> bool:
         """False when this household used up its weekly scan limit. The default household is never limited.
-        0 means unlimited."""
-        # ponytail: checked before the scan and counted after it, so scans running at the same moment
-        # (at most MAX_SCANS_AT_ONCE) can go a few over the limit
+        0 means unlimited. Checked before a scan and counted after it; one scan at a time per household keeps that exact."""
         limit = 0 if tenant.id == DEFAULT_ID else (tenant.scan_limit if tenant.scan_limit is not None else default_limit)
         return not limit or self.scans_this_week(tenant.id) < limit
 
     def count_scan(self, tenant: Tenant) -> None:
-        """Counts one scan that was read, for this household this week."""
+        """Counts one scan that Gemini answered, for this household this week."""
         with self._reg() as c:
             c.execute(
                 "INSERT INTO usage (tenant_id, week, scans) VALUES (?, ?, 1) "

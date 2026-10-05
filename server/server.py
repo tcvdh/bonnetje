@@ -181,9 +181,18 @@ def run_scan(tenant: Tenant, scan_id: str, image: bytes, mime: str, created_at: 
         raise scanning.ScanError("scan_rate_limited", "Je scant te snel. Wacht even en probeer het opnieuw.", 429)
     if not HOUSEHOLDS.scans_left(tenant, setting("scans_per_week")):
         raise scanning.ScanError("scan_quota", "Je scanlimiet voor deze week is bereikt.", 429)
-    scan, issues, warnings = scanning.scan_image(image, mime)
-    HOUSEHOLDS.count_scan(tenant)  # only a scan that was read counts, a failed one does not
-    STATS["scans"] += 1
+
+    def count() -> None:
+        HOUSEHOLDS.count_scan(tenant)
+        STATS["scans"] += 1
+
+    try:
+        scan, issues, warnings = scanning.scan_image(image, mime)
+    except scanning.ScanError as e:
+        if e.answered:  # Gemini read it (and that cost a call), it just was no usable receipt
+            count()
+        raise  # otherwise the server or Gemini failed: that is not the household's scan
+    count()
     today = time.strftime("%Y-%m-%d")
     listing, detail = scanning.to_app_shapes(scan_id_to_receipt_id(scan_id), scan, warnings, today)
     status = "draft" if issues else "ok"
@@ -355,14 +364,20 @@ _scan_slots = threading.BoundedSemaphore(MAX_SCANS_AT_ONCE)
 
 
 @contextlib.contextmanager
-def scan_slot():
-    """At most MAX_SCANS_AT_ONCE uploads / Gemini calls at a time, so a burst of big photos cannot exhaust memory."""
-    if not _scan_slots.acquire(blocking=False):
-        raise scanning.ScanError("server_busy", "De server is druk met scannen. Probeer het zo opnieuw.", 503)
+def scan_slot(tenant: Tenant):
+    """One scan at a time per household (one person scans, and its weekly limit is checked and counted without a
+    race), and at most MAX_SCANS_AT_ONCE on the whole server, so a burst of big photos cannot exhaust memory."""
+    if not tenant.scan_lock.acquire(blocking=False):
+        raise scanning.ScanError("scan_busy", "Je bent al een bonnetje aan het scannen. Wacht tot dat klaar is.", 429)
     try:
-        yield
+        if not _scan_slots.acquire(blocking=False):
+            raise scanning.ScanError("server_busy", "De server is druk met scannen. Probeer het zo opnieuw.", 503)
+        try:
+            yield
+        finally:
+            _scan_slots.release()
     finally:
-        _scan_slots.release()
+        tenant.scan_lock.release()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -561,7 +576,7 @@ class Handler(BaseHTTPRequestHandler):
     def _route_scans(self, method: str, path: str) -> bool:
         tenant = self.tenant
         if path == "/api/scans" and method == "POST":
-            with scan_slot():
+            with scan_slot(tenant):
                 self._create_scan()
             return True
 
@@ -578,7 +593,7 @@ class Handler(BaseHTTPRequestHandler):
         elif action in ("rescan", "image") and not tenant.photo_path(row["image_file"]).is_file():
             self._json({"error": "photo_missing"}, 404)
         elif action == "rescan" and method == "POST":
-            with scan_slot():
+            with scan_slot(tenant):
                 result = run_scan(tenant, scan_id, tenant.photo_path(row["image_file"]).read_bytes(), row["mime"], row["created_at"])
             if row["status"] == "ok":  # a rescan of a kept receipt stays kept; review is only for drafts
                 tenant.set_scan_status(scan_id, "ok")
