@@ -35,7 +35,21 @@ export function allocate(total: number, weights: number[]): number[] {
 }
 
 /**
- * What each person pays for one assignment, in cents. A split is exact: the odd cents go to different
+ * A split lists one name per part, so a name can appear more than once: `["Ik", "Ik", "Ik", "Bob"]` is
+ * 3 of 4 beers for Ik. `splitCounts` reads that back as `{ Ik: 3, Bob: 1 }`; `splitOf` writes it.
+ */
+export function splitCounts(split: string[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  split.forEach((p) => (out[p] = (out[p] ?? 0) + 1));
+  return out;
+}
+
+export const splitOf = (counts: Record<string, number>): string[] =>
+  Object.entries(counts).flatMap(([p, n]) => Array<string>(Math.max(0, Math.floor(n))).fill(p));
+
+/**
+ * What each person pays for one assignment, in cents. Every part of a split costs the same, so a person
+ * listed twice pays twice. A split is exact: the odd cents go to different
  * people for different items (`itemIndex` rotates who is first), so nobody always pays the extra cent.
  */
 export function shareCents(a: Assignment, itemIndex = 0): Record<string, number> {

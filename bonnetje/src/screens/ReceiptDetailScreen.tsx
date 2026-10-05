@@ -197,6 +197,8 @@ export default function ReceiptDetailScreen({ route, navigation }: ScreenProps<"
       <PersonPicker
         visible={pickerVisible}
         productName={products[pickingIndex]?.name || ""}
+        current={assignments[pickingIndex]}
+        quantity={products[pickingIndex]?.quantity}
         onAssign={(person) => actions.assign([pickingIndex], person)}
         onSplit={(people) => actions.split([pickingIndex], people)}
         onClear={() => actions.clear([pickingIndex])}

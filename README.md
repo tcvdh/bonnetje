@@ -56,7 +56,8 @@ Plain `http://` is only used for addresses inside your own network (private IPs,
 
 Every amount is a whole number of cents, and each one is worked out once, in `bonnetje/src/utils/settle.ts`.
 Discounts that belong to no product are spread over what is assigned, in proportion to the price, to the cent.
-A shared item is split exactly (the odd cent rotates between people). The receipt page, the balance, the QR code
+A shared item can be split between any number of people, and each person can take more than one part
+(5 beers: 3 for you, 1 each for two others). It is split exactly (the odd cent rotates between people). The receipt page, the balance, the QR code
 and the invoices all read those same amounts, so they always add up. Old receipts are settled again the first
 time the list loads.
 

@@ -19,8 +19,13 @@ export function storeName(receipt?: Receipt): string {
   return (receipt.source || "ah") === "ah" ? "Albert Heijn" : receipt.storeName || "Scan";
 }
 
-export function shareLabel(share: number): string {
-  return `${Math.round(share * 100)}%`;
+/** "1 van 5 stuks" when the share is a whole number of the line's items, otherwise a percentage ("25%"). */
+export function shareLabel(line: Pick<InvoiceLine, "share" | "quantity">): string {
+  const pieces = line.share * line.quantity;
+  if (Number.isInteger(line.quantity) && line.quantity > 1 && Math.abs(pieces - Math.round(pieces)) < 1e-9) {
+    return `${Math.round(pieces)} van ${line.quantity} stuks`;
+  }
+  return `${Math.round(line.share * 100)}%`;
 }
 
 interface BuildOptions {
@@ -88,7 +93,7 @@ export function buildInvoice({ person, receiptIds, data, receipts, details, now,
           name: product?.name ?? `Product ${i + 1}`,
           emoji: product?.emoji || undefined,
           quantity: product?.quantity ?? 1,
-          share: "person" in a ? 1 : 1 / a.split.length,
+          share: "person" in a ? 1 : a.split.filter((p) => p === person).length / a.split.length,
           amount: cents / 100,
         });
       });
@@ -171,7 +176,7 @@ function pushReceipts(out: string[], inv: Invoice) {
     out.push("", `${r.store}, ${dateShort(r.dateTime)}${r.voidedAt ? `, betaling ingetrokken op ${formatPaidAt(r.voidedAt)}` : ""}`);
     r.lines.forEach((l) => {
       const qty = l.quantity !== 1 ? `${l.quantity}x ` : "";
-      const share = l.share < 1 ? ` (${shareLabel(l.share)})` : "";
+      const share = l.share < 1 ? ` (${shareLabel(l)})` : "";
       out.push(`  ${l.emoji ? l.emoji + " " : ""}${qty}${l.name}${share}: ${eur(l.amount)}`);
     });
     if (inv.receipts.length > 1) out.push(`  Subtotaal: ${eur(r.subtotal)}`);

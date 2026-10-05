@@ -1,20 +1,26 @@
 import React, { useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import { pairsOf, personColor, PersonName } from "../constants";
+import { personColor, PersonName } from "../constants";
 import { useAppData } from "../context";
 import { colors, radius } from "../theme";
+import { Assignment } from "../types";
+import { splitCounts } from "../utils/settle";
 import { BottomSheet } from "./Sheet";
+import SplitPicker from "./SplitPicker";
 
 interface Props {
   visible: boolean;
   productName: string;
+  /** The item's current assignment, so an existing split opens as it is. */
+  current?: Assignment;
+  quantity?: number;
   onAssign: (person: PersonName) => void;
   onSplit: (people: PersonName[]) => void;
   onClear: () => void;
   onClose: () => void;
 }
 
-export default function PersonPicker({ visible, productName, onAssign, onSplit, onClear, onClose }: Props) {
+export default function PersonPicker({ visible, productName, current, quantity, onAssign, onSplit, onClear, onClose }: Props) {
   const [showSplit, setShowSplit] = useState(false);
   const { data } = useAppData();
 
@@ -44,28 +50,19 @@ export default function PersonPicker({ visible, productName, onAssign, onSplit, 
       </View>
 
       <Pressable style={s.linkRow} onPress={() => setShowSplit(!showSplit)}>
-        <Text style={s.linkText}>{showSplit ? "Splitsen verbergen" : "Splitsen tussen twee personen"}</Text>
+        <Text style={s.linkText}>{showSplit ? "Splitsen verbergen" : "Splitsen tussen meerdere personen"}</Text>
       </Pressable>
 
       {showSplit && (
-        <View style={s.splitRow}>
-          {pairsOf(data.people).map(([a, b]) => (
-            <Pressable
-              key={`${a}-${b}`}
-              style={({ pressed }) => [s.splitOpt, pressed && s.pressed]}
-              onPress={() => {
-                onSplit([a, b]);
-                handleClose();
-              }}
-            >
-              <Text style={s.splitText}>
-                <Text style={{ color: personColor(a).fg }}>{a}</Text>
-                {"  +  "}
-                <Text style={{ color: personColor(b).fg }}>{b}</Text>
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <SplitPicker
+          people={data.people}
+          initial={current && "split" in current ? splitCounts(current.split) : {}}
+          quantity={quantity}
+          onSplit={(split) => {
+            onSplit(split);
+            handleClose();
+          }}
+        />
       )}
 
       <Pressable
@@ -90,7 +87,4 @@ const s = StyleSheet.create({
   pressed: { opacity: 0.6 },
   linkRow: { paddingVertical: 14, alignItems: "center" },
   linkText: { color: colors.accent, fontSize: 14, fontWeight: "600" },
-  splitRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 4 },
-  splitOpt: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: radius.sm, backgroundColor: colors.raised },
-  splitText: { color: colors.sub, fontSize: 13, fontWeight: "600" },
 });

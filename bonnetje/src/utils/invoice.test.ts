@@ -9,6 +9,7 @@ import {
   reserveNumber,
   voidReceiptOnInvoices,
   withoutReservation,
+  shareLabel,
 } from "./invoice";
 import { emptyAppData, product } from "./testData";
 import { Invoice, Receipt } from "../types";
@@ -103,6 +104,26 @@ describe("buildInvoice", () => {
     expect(inv.receipts[0].lines.map((l) => l.amount)).toEqual([0.34, 0.33, 0.33]);
   });
 
+  it("shows the share of a split by parts", () => {
+    const data = emptyAppData({ assignments: { r1: { 0: { split: ["Ik", "Ik", "Ik", "Alice", "Bob"], cents: 500 } } } });
+    const inv = buildInvoice({
+      person: "Ik",
+      receiptIds: ["r1"],
+      data,
+      receipts: [receipt("r1", "2026-03-01T10:00:00")],
+      details: { r1: { products: [product("Bier", 5)] } },
+      now,
+      scope: "all",
+    });
+    expect(inv.receipts[0].lines[0]).toMatchObject({ share: 0.6, amount: 3 });
+  });
+
+  it("labels a share in items when it is a whole number of them, else as a percentage", () => {
+    expect(shareLabel({ share: 0.6, quantity: 5 })).toBe("3 van 5 stuks");
+    expect(shareLabel({ share: 1 / 3, quantity: 2 })).toBe("33%");
+    expect(shareLabel({ share: 0.5, quantity: 1 })).toBe("50%");
+  });
+
   it("only lists the person's own lines, ordered by receipt date", () => {
     const data = emptyAppData({
       assignments: {
@@ -190,7 +211,7 @@ describe("paymentRequestText", () => {
   it("lists the products and the link, and never says it is paid", () => {
     const text = paymentRequestText(inv, "https://bunq.me/x/3.00/Test");
     expect(text).toContain("Afrekening 2026-002");
-    expect(text).toContain("2x Melk (50%): €3,00");
+    expect(text).toContain("2x Melk (1 van 2 stuks): €3,00");
     expect(text).toContain("Totaal: €3,00");
     expect(text).toContain("https://bunq.me/x/3.00/Test");
     expect(text).not.toMatch(/betaald op|ingetrokken/);

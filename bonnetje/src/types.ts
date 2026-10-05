@@ -41,6 +41,7 @@ export interface AssignmentPerson {
 }
 
 export interface AssignmentSplit {
+  /** One name per equal part; a name can repeat (3 of 5 beers = listed 3 times). See `splitCounts`. */
   split: PersonName[];
   cents: number;
 }

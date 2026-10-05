@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocate, receiptCents, settleAssignments, shareCents, sumCents } from "./settle";
+import { allocate, receiptCents, settleAssignments, shareCents, splitCounts, splitOf, sumCents } from "./settle";
 import { owedByPerson, receiptBalance } from "./balance";
 import { buildInvoice, pendingReceiptIds } from "./invoice";
 import { applyOverrides, baseDiscountMap, getNetAmount } from "./discounts";
@@ -48,6 +48,13 @@ describe("shareCents", () => {
 
   it("splits negative amounts too", () => {
     expect(sumCents(Object.values(shareCents({ split: ["A", "B", "C"], cents: -1 })))).toBe(-1);
+  });
+
+  it("charges a person per part when they are listed more than once", () => {
+    // 5 beers for 4.99: 3 for Ik, 1 each for Alice and Bob
+    const beers: Assignment = { split: splitOf({ Ik: 3, Alice: 1, Bob: 1 }), cents: 499 };
+    expect(shareCents(beers)).toEqual({ Ik: 300, Alice: 100, Bob: 99 });
+    expect(splitCounts(beers.split)).toEqual({ Ik: 3, Alice: 1, Bob: 1 });
   });
 });
 
@@ -116,8 +123,10 @@ describe("all totals agree", () => {
       if (roll < 0.25) return; // left unassigned
       if (roll < 0.65) raw[i] = { person: people[Math.floor(next() * people.length)], cents: 0 };
       else {
+        // some people take several parts (3 of 5 beers), so names can repeat
         const size = 2 + Math.floor(next() * 3);
-        raw[i] = { split: people.slice(0, size), cents: 0 };
+        const split = people.slice(0, size).flatMap((p) => Array<string>(1 + Math.floor(next() * 3)).fill(p));
+        raw[i] = { split, cents: 0 };
       }
     });
     const { assignments } = settleAssignments(raw, products, priced.map, priced.unmatched);

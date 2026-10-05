@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import { pairsOf, personColor, PersonName } from "../constants";
+import { personColor, PersonName } from "../constants";
 import { useAppData } from "../context";
 import { colors, radius } from "../theme";
+import SplitPicker from "./SplitPicker";
 
 interface Props {
   count: number;
@@ -16,7 +17,6 @@ export default function BatchBar({ count, onAssign, onSplit, onClear, onCancel }
   const [showSplit, setShowSplit] = useState(false);
   const { data } = useAppData();
   if (count === 0) return null;
-
 
   return (
     <View style={s.bar}>
@@ -35,23 +35,11 @@ export default function BatchBar({ count, onAssign, onSplit, onClear, onCancel }
         ))}
       </View>
       <Pressable style={s.splitToggle} onPress={() => setShowSplit(!showSplit)} hitSlop={6}>
-        <Text style={s.splitToggleText}>{showSplit ? "Splitsen verbergen" : "Splitsen tussen twee personen"}</Text>
+        <Text style={s.splitToggleText}>{showSplit ? "Splitsen verbergen" : "Splitsen tussen meerdere personen"}</Text>
       </Pressable>
       {showSplit && (
-        <View style={s.pairs}>
-          {pairsOf(data.people).map(([a, b]) => (
-            <Pressable
-              key={`${a}-${b}`}
-              style={({ pressed }) => [s.pair, pressed && s.pressed]}
-              onPress={() => onSplit([a, b])}
-            >
-              <Text style={s.pairText}>
-                <Text style={{ color: personColor(a).fg }}>{a}</Text>
-                {"  +  "}
-                <Text style={{ color: personColor(b).fg }}>{b}</Text>
-              </Text>
-            </Pressable>
-          ))}
+        <View style={s.split}>
+          <SplitPicker people={data.people} onSplit={onSplit} />
         </View>
       )}
       <View style={s.secondary}>
@@ -85,9 +73,7 @@ const s = StyleSheet.create({
   btnText: { fontSize: 14, fontWeight: "700" },
   splitToggle: { alignItems: "center", paddingTop: 12 },
   splitToggleText: { color: colors.accent, fontSize: 13, fontWeight: "700" },
-  pairs: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
-  pair: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: radius.sm, backgroundColor: colors.line },
-  pairText: { color: colors.sub, fontSize: 13, fontWeight: "700" },
+  split: { marginTop: 10 },
   secondary: { flexDirection: "row", justifyContent: "space-between", marginTop: 12, paddingHorizontal: 4 },
   secondaryText: { color: colors.faint, fontSize: 13, fontWeight: "600" },
 });

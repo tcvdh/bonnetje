@@ -2,7 +2,8 @@ import React from "react";
 import { Text, View } from "react-native";
 import { personColor, PersonName } from "../constants";
 
-export default function PersonChip({ name, small }: { name: PersonName; small?: boolean }) {
+/** `count` above 1 shows how many parts of a split this person pays ("Ik ×3"). */
+export default function PersonChip({ name, small, count }: { name: PersonName; small?: boolean; count?: number }) {
   const c = personColor(name);
   return (
     <View
@@ -13,7 +14,10 @@ export default function PersonChip({ name, small }: { name: PersonName; small?: 
         borderRadius: 99,
       }}
     >
-      <Text style={{ color: c.fg, fontSize: small ? 11 : 13, fontWeight: "700" }}>{name}</Text>
+      <Text style={{ color: c.fg, fontSize: small ? 11 : 13, fontWeight: "700" }}>
+        {name}
+        {count && count > 1 ? ` ×${count}` : ""}
+      </Text>
     </View>
   );
 }

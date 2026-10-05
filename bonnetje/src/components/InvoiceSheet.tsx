@@ -71,7 +71,12 @@ export default function InvoiceSheet({ invoice, onClose, onDelete }: Props) {
                           {l.quantity !== 1 ? `${l.quantity}× ` : ""}
                           {l.name}
                         </Text>
-                        {l.share < 1 && <Text style={s.lineShare}>{shareLabel(l.share)} van dit product</Text>}
+                        {l.share < 1 && (
+                          <Text style={s.lineShare}>
+                            {shareLabel(l)}
+                            {shareLabel(l).endsWith("%") ? " van dit product" : ""}
+                          </Text>
+                        )}
                       </View>
                       <Text style={s.lineAmount}>{eur(l.amount)}</Text>
                     </View>

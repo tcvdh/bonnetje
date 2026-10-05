@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import { personColor } from "../constants";
 import { Product, Assignment } from "../types";
 import { colors, mono, eur } from "../theme";
+import { splitCounts } from "../utils/settle";
 import PersonChip from "./PersonChip";
 import Perforation from "./Perforation";
 
@@ -22,7 +23,8 @@ export default function ProductItem({ product, assignment, discount, isPaid, sel
   const actualPrice = originalPrice + discount;
   const hasDiscount = discount < -0.005;
 
-  const owners = assignment ? ("person" in assignment ? [assignment.person] : assignment.split) : [];
+  const parts = assignment ? splitCounts("person" in assignment ? [assignment.person] : assignment.split) : {};
+  const owners = Object.keys(parts);
   const barColor = owners.length ? personColor(owners[0]).fg : "transparent";
 
   return (
@@ -40,7 +42,7 @@ export default function ProductItem({ product, assignment, discount, isPaid, sel
           {(owners.length > 0 || hasDiscount) && (
             <View style={s.meta}>
               {owners.map((p) => (
-                <PersonChip key={p} name={p} small />
+                <PersonChip key={p} name={p} count={parts[p]} small />
               ))}
               {hasDiscount && <Text style={s.bonusTag}>Bonus</Text>}
             </View>
@@ -74,7 +76,7 @@ const s = StyleSheet.create({
   main: { flex: 1 },
   name: { color: colors.text, fontSize: 15, lineHeight: 20 },
   struck: { textDecorationLine: "line-through", color: colors.sub },
-  meta: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 5 },
+  meta: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 5 },
   bonusTag: { color: colors.bonus, fontSize: 11, fontWeight: "700" },
   priceCol: { alignItems: "flex-end", minWidth: 64 },
   price: { color: colors.text, fontFamily: mono, fontSize: 14, fontWeight: "600" },
