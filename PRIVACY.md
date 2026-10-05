@@ -14,6 +14,9 @@ happens to the data there; ask them.
   your split data and the payment account (IBAN and name) so it works offline. "Server wisselen" in the menu deletes all of it.
 - Sends receipts, the split (names you type for housemates, who paid) and receipt photos to the server you
   entered, and to no one else.
+- Checks for updates by downloading `version.txt` from the download page on GitHub Pages (`tcvdh.github.io`) when
+  it starts, comes back to the front, or you pull to refresh. That request contains no data from the app; GitHub sees
+  your IP address, as with any website.
 - Asks for the **camera** and **photo library** only to scan or pick a receipt, and for **local network** access
   (iOS) to reach a server at home. Photos are only used when you scan; nothing is read in the background.
 

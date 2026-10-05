@@ -1,10 +1,10 @@
 import React, { useLayoutEffect, useState } from "react";
-import { View, Text, FlatList, Pressable, StyleSheet, RefreshControl, Alert } from "react-native";
+import { View, Text, FlatList, Pressable, StyleSheet, RefreshControl, Alert, Linking } from "react-native";
 import { ScreenProps } from "../navigation";
 import { useAppData } from "../context";
 import { getReceipt, describeError, hasUnsentChanges, deleteScannedReceipt } from "../api";
 import { Receipt, Invoice } from "../types";
-import { PersonName } from "../constants";
+import { PersonName, RELEASES_URL } from "../constants";
 import { colors } from "../theme";
 import ReceiptCard from "../components/ReceiptCard";
 import BalanceCard from "../components/BalanceCard";
@@ -31,7 +31,7 @@ import { baseDiscountMap, applyOverrides } from "../utils/discounts";
 type Sheet = "menu" | "invoices" | "hidden" | "scan" | "add" | "pay" | "switch" | null;
 
 export default function ReceiptListScreen({ navigation }: ScreenProps<"List">) {
-  const { data, persistData, setReceipts, disconnect } = useAppData();
+  const { data, persistData, setReceipts, disconnect, update, checkForUpdate } = useAppData();
   const { receipts, ahError, ahCachedAt, refreshing, refresh } = useReceiptFeed();
   const selection = useSelection<string>();
 
@@ -106,6 +106,9 @@ export default function ReceiptListScreen({ navigation }: ScreenProps<"List">) {
   const header = (
     <View>
       {notice !== "" && <Banner text={notice} onPress={() => setNotice("")} />}
+      {update.level === "optional" && (
+        <Banner text={`Versie ${update.latest} is uit. Tik om de update te downloaden.`} onPress={() => Linking.openURL(RELEASES_URL)} />
+      )}
       <AhBanner error={ahError} cachedAt={ahCachedAt} />
       <PeopleLegend people={data.people} onPerson={setPersonShown} onAdd={() => setSheet("add")} />
       <BalanceCard
@@ -155,7 +158,10 @@ export default function ReceiptListScreen({ navigation }: ScreenProps<"List">) {
             />
           </SwipeableRow>
         )}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.sub} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => {
+              refresh();
+              checkForUpdate();
+            }} tintColor={colors.sub} />}
         contentContainerStyle={{ padding: 16, paddingBottom: 110 }}
       />
 

@@ -97,6 +97,17 @@ The site only holds the latest build of each platform (a platform you skip in a 
 `v<version>-build.<n>`). Type a version in the workflow form (or bump `expo.version` in `bonnetje/app.json`) for a new version
 number; the build number goes up by itself.
 
+The site also gets `version.txt` (<https://tcvdh.github.io/bonnetje/version.txt>), the version in plain text. The app
+checks it on start, when it comes back to the front, and on pull to refresh, and compares it with its own version:
+
+| New version | In the app |
+|---|---|
+| patch (`1.1.2` to `1.1.3`) | Yellow banner on the list ("Versie 1.1.3 is uit"); tap it to download. The app keeps working. |
+| minor or major (`1.1.x` to `1.2.0`, `2.0.0`) | Red "Update nodig" over the whole app; nothing works until the new version is installed. |
+
+So bump the minor version when old installs must stop writing the shared data (a breaking change to its shape or
+meaning), and the patch version for everything else. Offline, or with no `version.txt`, the app shows nothing.
+
 ## Privacy and security
 
 - [PRIVACY.md](PRIVACY.md): what the app and the server store and where receipt photos go.

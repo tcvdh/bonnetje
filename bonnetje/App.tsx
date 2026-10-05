@@ -11,6 +11,8 @@ import { flushPending, forgetServer, getAuthStatus, loadData, loadServerConfig, 
 import SetupScreen from "./src/screens/SetupScreen";
 import ReceiptListScreen from "./src/screens/ReceiptListScreen";
 import ReceiptDetailScreen from "./src/screens/ReceiptDetailScreen";
+import UpdateRequired from "./src/components/UpdateRequired";
+import { APP_VERSION, useUpdateCheck } from "./src/hooks/useUpdateCheck";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -30,6 +32,7 @@ export default function App() {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   // Always the newest data, so an update function never starts from a stale render.
   const dataRef = useRef<AppData>(emptyData);
+  const { update, check: checkForUpdate } = useUpdateCheck();
 
   const applyData = useCallback((next: AppData) => {
     dataRef.current = next;
@@ -91,17 +94,21 @@ export default function App() {
   }, [applyData]);
 
   const context = useMemo(
-    () => ({ data, persistData, receipts, setReceipts, disconnect }),
-    [data, persistData, receipts, disconnect]
+    () => ({ data, persistData, receipts, setReceipts, disconnect, update, checkForUpdate }),
+    [data, persistData, receipts, disconnect, update, checkForUpdate]
   );
 
   if (loading) return null;
+
+  // Drawn last, over everything, so nothing below it can be tapped.
+  const blocker = update.level === "required" && <UpdateRequired current={APP_VERSION} latest={update.latest} />;
 
   if (!authed) {
     return (
       <>
         <StatusBar style="light" />
         <SetupScreen onConnected={handleConnected} />
+        {blocker}
       </>
     );
   }
@@ -131,6 +138,7 @@ export default function App() {
           />
         </Stack.Navigator>
       </NavigationContainer>
+      {blocker}
     </AppContext.Provider>
   );
 }

@@ -41,6 +41,7 @@ Bonnetje Splitter: split supermarket receipts between housemates. The app is a t
 - The Albert Heijn warning comes from the server: `/api/receipts` returns `ahError` only when the server runs with `RECEIPT_USE_AH_API=true` and is not logged in. Do not add AH-specific UI that assumes AH is on.
 - `src/utils/serverUrl.ts` decides http vs https for the typed server address (http only for local addresses). Android needs `usesCleartextTraffic` because its network config cannot express "private IPs only", so this function is the enforcement; keep its tests passing.
 - Hide vs delete: hiding adds the id to `data.hidden` and nothing else. Deleting (only scanned receipts, `utils/receipts.ts`, done from the Verborgen sheet) first calls `DELETE /api/scans/:id` on the server and only then `removeReceipt`s what really got deleted from the data. Invoices keep their own snapshot of the lines, so they stay correct.
+- Update check: `useUpdateCheck` (in `App.tsx`) fetches `version.txt` from `RELEASES_URL` (`constants.ts`, the GitHub Pages site the release workflow publishes) on start, on return to the front, and on pull to refresh, and compares it with `app.json`'s `expo.version` (`utils/version.ts`). A newer patch shows a yellow `Banner` on the list; a newer minor or major shows `UpdateRequired` over the whole app, which blocks it. A failed fetch or unreadable file must never block anyone.
 - Server API and setup: `../server/README.md`. Deploy runbook: `../server/DEPLOY.md`.
 
 ## Money rules (do not break these)

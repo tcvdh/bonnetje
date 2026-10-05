@@ -11,3 +11,6 @@ export function personColor(name: string): { bg: string; fg: string } {
   const hue = hash % 360;
   return { bg: `hsla(${hue},80%,60%,0.18)`, fg: `hsl(${hue},85%,65%)` };
 }
+
+/** Download page; the release workflow also publishes `version.txt` there, the newest version in plain text. */
+export const RELEASES_URL = "https://tcvdh.github.io/bonnetje/";

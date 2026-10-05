@@ -136,6 +136,8 @@ jobs:
           cp assets/icon.png site/
           cp ../.github/site/index.html site/
           touch site/.nojekyll
+          # The app compares itself with this: a new minor/major locks old installs, a new patch only nags.
+          node -p "require('./app.json').expo.version" > site/version.txt
           cp -t site "$IPA_NAME" "$APK_NAME" 2>/dev/null || true
 
           # Pages replaces the whole site, so a platform skipped in this run is

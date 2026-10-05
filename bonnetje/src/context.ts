@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react";
 import { AppData, Receipt } from "./types";
 import { DEFAULT_PEOPLE } from "./constants";
+import type { UpdateInfo } from "./hooks/useUpdateCheck";
 
 export const emptyData: AppData = {
   assignments: {},
@@ -24,6 +25,9 @@ export interface AppContextType {
   setReceipts: (receipts: Receipt[]) => void;
   /** Forgets the server and returns to the connect screen. */
   disconnect: () => Promise<void>;
+  /** Newest release compared with this install; "optional" shows a banner on the list. */
+  update: UpdateInfo;
+  checkForUpdate: () => void;
 }
 
 export const AppContext = createContext<AppContextType>({
@@ -32,6 +36,8 @@ export const AppContext = createContext<AppContextType>({
   receipts: [],
   setReceipts: () => {},
   disconnect: async () => {},
+  update: { level: "none", latest: "" },
+  checkForUpdate: () => {},
 });
 
 export function useAppData() {
