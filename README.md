@@ -5,8 +5,8 @@ housemates, keep track of who has paid, and hand out invoices. The app is in Dut
 payment QR codes for now.
 
 You run your own server (Docker, one command) and connect the app to it with the server address and a password.
-One server can also serve several separate households, each with its own key and its own private data
-([server/README.md](server/README.md#households-more-than-one-group)), managed from a local admin dashboard
+One server can also serve several people (users), each with their own key and their own private data
+([server/README.md](server/README.md#users-more-than-one-person)), managed from a local admin dashboard
 ([server/README.md](server/README.md#admin-dashboard)).
 Not affiliated with or endorsed by Albert Heijn or Google.
 
@@ -37,7 +37,7 @@ The Albert Heijn integration is **off by default** (`RECEIPT_USE_AH_API=false`).
 meant only for your own self-hosted server: see [server/README.md](server/README.md#albert-heijn-optional).
 
 Set `RECEIPT_IBAN` and `RECEIPT_NAME` in the server settings to get the payment QR code in the app, and optionally `RECEIPT_BUNQ` (a bunq.me handle) for a shareable payment link (everything
-personal lives on the server; the app contains no account details; extra households get theirs from the dashboard or `tenant payee`). All settings are listed in
+personal lives on the server; the app contains no account details; extra users get theirs from the dashboard or `tenant payee`). All settings are listed in
 [server/README.md](server/README.md#settings), and `server/.env.example` is a template to copy.
 
 ## App

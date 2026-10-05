@@ -6,7 +6,7 @@
 * Needs the admin key on every API call (a header, never a cookie; a web page from elsewhere cannot read it), wrong
   keys are throttled, and it sends no CORS headers.
 
-It creates and changes households through the same registry the `tenant` command uses. It never shows a household's
+It creates and changes users through the same registry the `tenant` command uses. It never shows a user's
 key (only hashes are stored): a key is shown once, when it is made or replaced.
 """
 from __future__ import annotations
@@ -46,11 +46,11 @@ def _limit(value):
 
 
 class Api:
-    """The dashboard's operations. `ctx` is what the server passes in (households, counters, settings)."""
+    """The dashboard's operations. `ctx` is what the server passes in (users, counters, settings)."""
 
     def __init__(self, ctx):
         self.ctx = ctx
-        self.hh = ctx.households
+        self.hh = ctx.users
 
     # -- views
     def _limits(self, tenant, builtin: bool) -> dict:
@@ -61,16 +61,16 @@ class Api:
         out = {}
         for name in own:
             if builtin and name == "week":
-                out[name] = {"own": None, "effective": 0}  # the built-in household is never limited on scans per week
+                out[name] = {"own": None, "effective": 0}  # the built-in user is never limited on scans per week
             else:
                 out[name] = {"own": own[name], "effective": server[name] if own[name] is None else own[name]}
         return out
 
-    def _household(self, tenant, seen: dict, builtin: bool, disabled: bool = False, created=None) -> dict:
+    def _user(self, tenant, seen: dict, builtin: bool, disabled: bool = False, created=None) -> dict:
         try:
             stats = tenant.stats()
         except Exception:  # a broken database must not take the whole overview down
-            log.exception("stats failed for household %s", tenant.id)
+            log.exception("stats failed for user %s", tenant.id)
             stats = None
         return {
             "id": tenant.id, "name": tenant.name if not builtin else "Standaard (RECEIPT_APP_KEY)",
@@ -80,23 +80,23 @@ class Api:
             "ahEnabled": tenant.ah_enabled,
         }
 
-    def households(self) -> list[dict]:
+    def users(self) -> list[dict]:
         seen = self.hh.last_seen()
-        out = [self._household(self.hh.default(), seen, True)] if self.hh.use_default else []
+        out = [self._user(self.hh.default(), seen, True)] if self.hh.use_default else []
         for row in self.hh.rows():
-            out.append(self._household(self.hh._registered(row), seen, False, bool(row["disabled"]), row["created_at"]))
+            out.append(self._user(self.hh._registered(row), seen, False, bool(row["disabled"]), row["created_at"]))
         return out
 
     def overview(self) -> dict:
         ctx = self.ctx
-        houses = self.households()
+        everyone = self.users()
         return {
             "server": ctx.info(),
             "counters": dict(ctx.stats),
             "totals": {
-                "households": len(houses), "active": sum(1 for h in houses if not h["disabled"]),
-                "scansWeek": sum(h["scansWeek"] for h in houses),
-                "bytes": sum((h["stats"] or {}).get("bytes", 0) for h in houses),
+                "users": len(everyone), "active": sum(1 for h in everyone if not h["disabled"]),
+                "scansWeek": sum(h["scansWeek"] for h in everyone),
+                "bytes": sum((h["stats"] or {}).get("bytes", 0) for h in everyone),
             },
             "settings": {name: {"value": ctx.setting(name), "source": ctx.setting_source(name)} for name in SETTING_MAX},
         }
@@ -110,11 +110,11 @@ class Api:
     def create(self, body: dict) -> dict:
         name = str(body.get("name") or "").strip()
         if not name:
-            raise BadInput("Geef het huishouden een naam.")
+            raise BadInput("Geef de gebruiker een naam.")
         ah = body.get("ahEnabled")
         ah_val = None if ah is None else (1 if ah else 0)
         tenant, key = self.hh.add(name, _limit(body.get("week")), _limit(body.get("requests")), _limit(body.get("rate")), ah_val)
-        log.info("admin: household %s created", tenant.id)
+        log.info("admin: user %s created", tenant.id)
         return {"id": tenant.id, "key": key}
 
     def update(self, tid: str, body: dict) -> dict:
@@ -136,9 +136,9 @@ class Api:
             self._payee(tid, body["payee"])
         if changes:
             if tid == DEFAULT_ID:
-                raise BadInput("Het standaard huishouden hoort bij RECEIPT_APP_KEY uit .env; hier kun je alleen het betaalaccount aanpassen.")
+                raise BadInput("De standaardgebruiker hoort bij RECEIPT_APP_KEY uit .env; hier kun je alleen het betaalaccount aanpassen.")
             self.hh.update(tid, **changes)
-        log.info("admin: household %s changed: %s", tid, sorted(set(body)))
+        log.info("admin: user %s changed: %s", tid, sorted(set(body)))
         return {"ok": True}
 
     def _payee(self, tid: str, payee):
@@ -161,19 +161,19 @@ class Api:
 
     def rotate(self, tid: str) -> dict:
         if tid == DEFAULT_ID:
-            raise BadInput("Het standaard huishouden gebruikt RECEIPT_APP_KEY uit .env; pas die daar aan.")
+            raise BadInput("De standaardgebruiker gebruikt RECEIPT_APP_KEY uit .env; pas die daar aan.")
         key = self.hh.rotate(tid)
-        log.info("admin: key of household %s replaced", tid)
+        log.info("admin: key of user %s replaced", tid)
         return {"key": key}
 
     def delete(self, tid: str, body: dict) -> dict:
         if tid == DEFAULT_ID:
-            raise BadInput("Het standaard huishouden kan hier niet worden verwijderd.")
+            raise BadInput("De standaardgebruiker kan hier niet worden verwijderd.")
         row = self.hh.row(tid)
         if body.get("confirm") != row["name"]:
-            raise BadInput("Typ de naam van het huishouden om te bevestigen.")
+            raise BadInput("Typ de naam van de gebruiker om te bevestigen.")
         self.hh.delete(tid)
-        log.info("admin: household %s deleted", tid)
+        log.info("admin: user %s deleted", tid)
         return {"ok": True}
 
     def change_settings(self, body: dict) -> dict:
@@ -257,13 +257,13 @@ def make_handler(key: str, api: Api):
         def _route(self, method: str, path: str) -> None:
             if method == "GET" and path == "/api/overview":
                 return self._json(api.overview())
-            if method == "GET" and path == "/api/households":
-                return self._json(api.households())
-            if method == "POST" and path == "/api/households":
+            if method == "GET" and path == "/api/users":
+                return self._json(api.users())
+            if method == "POST" and path == "/api/users":
                 return self._json(api.create(self._body()), 201)
             if method == "PUT" and path == "/api/settings":
                 return self._json(api.change_settings(self._body()))
-            m = re.fullmatch(r"/api/households/([0-9a-f]{16}|default)(?:/(rotate))?", path)
+            m = re.fullmatch(r"/api/users/([0-9a-f]{16}|default)(?:/(rotate))?", path)
             if m:
                 tid, action = m.groups()
                 if method == "PUT" and action is None:

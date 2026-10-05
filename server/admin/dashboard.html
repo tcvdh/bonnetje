@@ -75,14 +75,14 @@
     </header>
     <nav role="tablist">
       <button role="tab" id="tab-overview" aria-selected="true">Overzicht</button>
-      <button role="tab" id="tab-households" aria-selected="false">Huishoudens</button>
+      <button role="tab" id="tab-users" aria-selected="false">Gebruikers</button>
     </nav>
 
     <div id="overview">
       <div class="grid" id="cards"></div>
       <h2>Limieten voor de hele server</h2>
       <div class="panel">
-        <p class="sub" style="display:block;margin-top:0">Geldt voor elk huishouden dat geen eigen limiet heeft. Een waarde die je hier instelt wint van het .env-bestand. 0 = onbeperkt, leeg = terug naar .env / standaard.</p>
+        <p class="sub" style="display:block;margin-top:0">Geldt voor elke gebruiker die geen eigen limiet heeft. Een waarde die je hier instelt wint van het .env-bestand. 0 = onbeperkt, leeg = terug naar .env / standaard.</p>
         <div class="row" id="settings"></div>
         <p class="err" id="settingsErr" role="alert"></p>
         <button id="saveSettings">Opslaan</button>
@@ -91,10 +91,10 @@
       <div class="panel"><dl id="info"></dl></div>
     </div>
 
-    <div id="households" hidden>
-      <div class="toolbar"><span class="sub" id="householdsSub"></span><button id="newHousehold">Nieuw huishouden</button></div>
+    <div id="users" hidden>
+      <div class="toolbar"><span class="sub" id="usersSub"></span><button id="newUser">Nieuwe gebruiker</button></div>
       <div class="scroll"><table>
-        <thead><tr><th>Huishouden</th><th>Status</th><th>Laatst gezien</th><th>Bonnetjes</th><th>Scans (week)</th><th>Limieten per minuut</th><th>Opslag</th><th>AH</th><th></th></tr></thead>
+        <thead><tr><th>Gebruiker</th><th>Status</th><th>Laatst gezien</th><th>Bonnetjes</th><th>Scans (week)</th><th>Limieten per minuut</th><th>Opslag</th><th>AH</th><th></th></tr></thead>
         <tbody id="rows"></tbody>
       </table></div>
     </div>
@@ -134,19 +134,19 @@ const fmtDur = (s) => s < 3600 ? Math.round(s / 60) + " min" : s < 172800 ? (s /
 const limitText = (l) => (l.effective === 0 ? "onbeperkt" : String(l.effective)) + (l.own === null ? "" : " *");
 const SOURCE = { dashboard: "dashboard", environment: ".env", "built-in": "standaard" };
 
-let state = { overview: null, households: [] };
+let state = { overview: null, users: [] };
 
 function showLogin(msg) { store.set(""); $("#app").hidden = true; $("#login").hidden = false; $("#loginErr").textContent = msg || ""; $("#adminKey").focus(); }
 
 async function load() {
-  const [overview, households] = await Promise.all([api("GET", "/api/overview"), api("GET", "/api/households")]);
-  state = { overview, households };
+  const [overview, users] = await Promise.all([api("GET", "/api/overview"), api("GET", "/api/users")]);
+  state = { overview, users };
   $("#login").hidden = true; $("#app").hidden = false;
   render();
 }
 
 function render() {
-  const { overview: o, households } = state;
+  const { overview: o, users } = state;
   const s = o.server;
   $("#chips").replaceChildren(
     h("span", { class: "chip" }, "Draait " + fmtDur(s.uptimeSeconds)),
@@ -155,7 +155,7 @@ function render() {
   );
   const card = (n, l) => h("div", { class: "card" }, h("div", { class: "n" }, n), h("div", { class: "l" }, l));
   $("#cards").replaceChildren(
-    card(`${o.totals.active} / ${o.totals.households}`, "huishoudens actief"),
+    card(`${o.totals.active} / ${o.totals.users}`, "gebruikers actief"),
     card(o.totals.scansWeek, "scans deze week"),
     card(fmtBytes(o.totals.bytes), "opslag (data + foto's)"),
     card(o.counters.requests, "verzoeken sinds start"),
@@ -172,13 +172,13 @@ function render() {
   )));
   $("#info").replaceChildren(...[
     ["Databasemap", s.dataDir], ["Poort", s.port], ["Max. gelijktijdige verbindingen", s.maxConnections],
-    ["Ingebouwd huishouden (RECEIPT_APP_KEY)", s.builtinHousehold ? "ja" : "nee"],
+    ["Ingebouwde gebruiker (RECEIPT_APP_KEY)", s.builtinUser ? "ja" : "nee"],
     ["Vertrouwde proxy's", s.trustedProxies.length ? s.trustedProxies.join(", ") : "geen"],
     ["CORS", s.corsOrigin || "uit"],
   ].flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)]));
 
-  $("#householdsSub").textContent = "* = eigen limiet; anders de waarde voor de hele server. Sleutels zijn niet terug te lezen: ze worden maar één keer getoond.";
-  $("#rows").replaceChildren(...households.map(row));
+  $("#usersSub").textContent = "* = eigen limiet; anders de waarde voor de hele server. Sleutels zijn niet terug te lezen: ze worden maar één keer getoond.";
+  $("#rows").replaceChildren(...users.map(row));
 }
 
 function row(x) {
@@ -210,7 +210,7 @@ function keyDialog(title, key) {
   const dlg = $("#keyDlg");
   dlg.replaceChildren(
     h("h3", {}, title),
-    h("p", { class: "sub", style: "display:block" }, "Geef deze sleutel aan het huishouden: ze vullen hem in de app in, samen met het serveradres. Hij wordt maar één keer getoond."),
+    h("p", { class: "sub", style: "display:block" }, "Geef deze sleutel aan de gebruiker: die vult hem in de app in, samen met het serveradres. Hij wordt maar één keer getoond."),
     h("div", { class: "key" }, key),
     h("div", { class: "foot" },
       h("button", { class: "ghost", onclick: async (e) => { try { await navigator.clipboard.writeText(key); e.target.textContent = "Gekopieerd"; } catch { e.target.textContent = "Selecteer en kopieer zelf"; } } }, "Kopieer"),
@@ -225,8 +225,8 @@ function editDialog(x) {
   const lim = (label, id, k, name) => field(`${label} (leeg = standaard ${srv[name].value === 0 ? "onbeperkt" : srv[name].value}; 0 = onbeperkt)`, id, own(k), { type: "number", min: "0", placeholder: "standaard" });
   const payee = x && x.stats && x.stats.payee;
   dlg.replaceChildren(...[
-    h("h3", {}, isNew ? "Nieuw huishouden" : x.builtin ? "Standaard huishouden" : "Huishouden bewerken"),
-    x && x.builtin ? h("p", { class: "sub", style: "display:block" }, "Dit huishouden is de RECEIPT_APP_KEY uit .env. Alleen het betaalaccount is hier te wijzigen.") : null,
+    h("h3", {}, isNew ? "Nieuwe gebruiker" : x.builtin ? "Standaardgebruiker" : "Gebruiker bewerken"),
+    x && x.builtin ? h("p", { class: "sub", style: "display:block" }, "Deze gebruiker is de RECEIPT_APP_KEY uit .env. Alleen het betaalaccount is hier te wijzigen.") : null,
     x && x.builtin ? null : field("Naam", "e-name", x ? x.name : "", { maxlength: "60" }),
     x && x.builtin ? null : h("div", { class: "row" },
       lim("Scans per week", "e-week", "week", "scans_per_week"),
@@ -257,8 +257,8 @@ function editDialog(x) {
       if (isNew) {
         const body = { name: $("#e-name").value, week: numOrNull("e-week"), requests: numOrNull("e-requests"), rate: numOrNull("e-rate") };
         if (ahVal !== undefined) body.ahEnabled = ahVal;
-        const r = await api("POST", "/api/households", body);
-        close(dlg); await load(); keyDialog("Huishouden aangemaakt", r.key); return;
+        const r = await api("POST", "/api/users", body);
+        close(dlg); await load(); keyDialog("Gebruiker aangemaakt", r.key); return;
       }
       const body = {};
       if (!x.builtin) {
@@ -267,7 +267,7 @@ function editDialog(x) {
       }
       const iban = $("#e-iban").value.trim(), pname = $("#e-payee").value.trim(), bunq = $("#e-bunq").value.trim();
       if (iban || pname || bunq) body.payee = { iban, name: pname, bunq }; else if (payee) body.payee = null;
-      await api("PUT", "/api/households/" + x.id, body);
+      await api("PUT", "/api/users/" + x.id, body);
       close(dlg); await load();
     } catch (e) { $("#e-err").textContent = e.message; }
   };
@@ -276,33 +276,33 @@ function editDialog(x) {
 
 async function rotate(x) {
   if (!confirm(`Nieuwe sleutel voor "${x.name}"? De oude sleutel werkt daarna niet meer.`)) return;
-  try { const r = await api("POST", `/api/households/${x.id}/rotate`); keyDialog("Nieuwe sleutel", r.key); } catch (e) { alert(e.message); }
+  try { const r = await api("POST", `/api/users/${x.id}/rotate`); keyDialog("Nieuwe sleutel", r.key); } catch (e) { alert(e.message); }
 }
 async function toggle(x) {
-  if (!x.disabled && !confirm(`"${x.name}" uitzetten? De app van dit huishouden krijgt dan een foutmelding. De gegevens blijven bewaard.`)) return;
-  try { await api("PUT", "/api/households/" + x.id, { disabled: !x.disabled }); await load(); } catch (e) { alert(e.message); }
+  if (!x.disabled && !confirm(`"${x.name}" uitzetten? De app van deze gebruiker krijgt dan een foutmelding. De gegevens blijven bewaard.`)) return;
+  try { await api("PUT", "/api/users/" + x.id, { disabled: !x.disabled }); await load(); } catch (e) { alert(e.message); }
 }
 function deleteDialog(x) {
   const dlg = $("#deleteDlg");
   dlg.replaceChildren(
-    h("h3", {}, "Huishouden verwijderen"),
+    h("h3", {}, "Gebruiker verwijderen"),
     h("p", { class: "sub", style: "display:block" }, `Alle gegevens van "${x.name}" worden definitief verwijderd: bonnetjes, verdeling, afrekeningen en foto's (${x.stats ? fmtBytes(x.stats.bytes) : "?"}). Dit kan niet ongedaan worden gemaakt. Typ de naam om te bevestigen.`),
     field("Naam", "d-name", ""),
     h("p", { class: "err", id: "d-err", role: "alert" }),
     h("div", { class: "foot" }, h("button", { class: "ghost", onclick: () => close(dlg) }, "Annuleren"), h("button", { class: "danger", id: "d-go" }, "Definitief verwijderen")),
   );
   $("#d-go").onclick = async () => {
-    try { await api("DELETE", "/api/households/" + x.id, { confirm: $("#d-name").value }); close(dlg); await load(); } catch (e) { $("#d-err").textContent = e.message; }
+    try { await api("DELETE", "/api/users/" + x.id, { confirm: $("#d-name").value }); close(dlg); await load(); } catch (e) { $("#d-err").textContent = e.message; }
   };
   dlg.showModal();
 }
 
 function tab(name) {
-  for (const t of ["overview", "households"]) { $("#" + t).hidden = t !== name; $("#tab-" + t).setAttribute("aria-selected", String(t === name)); }
+  for (const t of ["overview", "users"]) { $("#" + t).hidden = t !== name; $("#tab-" + t).setAttribute("aria-selected", String(t === name)); }
 }
 $("#tab-overview").onclick = () => tab("overview");
-$("#tab-households").onclick = () => tab("households");
-$("#newHousehold").onclick = () => editDialog(null);
+$("#tab-users").onclick = () => tab("users");
+$("#newUser").onclick = () => editDialog(null);
 $("#logout").onclick = () => showLogin("");
 $("#loginBtn").onclick = () => { store.set($("#adminKey").value.trim()); load().catch((e) => { if (e.message !== "unauthorized") $("#loginErr").textContent = "Kan de server niet bereiken."; }); };
 $("#adminKey").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#loginBtn").click(); });

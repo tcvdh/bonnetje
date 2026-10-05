@@ -120,7 +120,7 @@ export function describeError(e: unknown): string {
     case "timeout":
       return "De server reageert niet op tijd. Probeer het zo opnieuw.";
     case "unauthorized":
-      return "De server-sleutel klopt niet, of dit huishouden is uitgeschakeld.";
+      return "De server-sleutel klopt niet, of deze gebruiker is uitgeschakeld.";
     case "rate_limited":
       return "Je doet te veel verzoeken achter elkaar. Wacht even en probeer het opnieuw.";
     case "too_many_attempts":

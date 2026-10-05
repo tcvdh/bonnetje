@@ -1,8 +1,8 @@
 # Privacy
 
 Bonnetje Splitter is software you run yourself: the app connects to a server that you (or someone you trust) run.
-One server can hold several separate households; each has its own key, and its data is kept in its own private
-database and photo folder, apart from every other household's.
+One server can hold several separate users; each has its own key, and its data is kept in its own private
+database and photo folder, apart from every other user's.
 There is no central service, no account, no advertising and no analytics or tracking in the app or the server.
 
 This page describes what the software does. If someone else runs the server you connect to, they decide what
@@ -24,17 +24,17 @@ happens to the data there; ask them.
 
 Stores in its data folder, on the machine where it runs:
 
-- per household: the split data (people's names, who owes what, payments), as one record;
+- per user: the split data (people's names, who owes what, payments), as one record;
 - scanned receipts and the original receipt photos;
-- per household, the payment details (the built-in household: `RECEIPT_IBAN` and `RECEIPT_NAME`), sent to the app to build
+- per user, the payment details (the built-in user: `RECEIPT_IBAN` and `RECEIPT_NAME`), sent to the app to build
   the payment QR code;
-- per household, optionally a bunq.me handle (only to build a payment link the app can share; it can be used with or without an IBAN);
-- per household, when it last used the server and how many scans it used per week (for the limits and the admin
+- per user, optionally a bunq.me handle (only to build a payment link the app can share; it can be used with or without an IBAN);
+- per user, when it last used the server and how many scans it used per week (for the limits and the admin
   dashboard), and a hash of its key (never the key itself);
 - only with `RECEIPT_USE_AH_API=true` (self-hosting): your Albert Heijn login tokens and a copy of your AH
   receipts.
 
-The server log contains the client address, the household id and the request line (for example `GET /api/data`), and
+The server log contains the client address, the user id and the request line (for example `GET /api/data`), and
 never keys, photos or receipt contents.
 
 Nothing is sent anywhere else, except:
@@ -59,15 +59,15 @@ Nothing is sent anywhere else, except:
   24 hours.
 - Photo retention: with `RECEIPT_PHOTO_DAYS` set, the server deletes the photo of a kept receipt after that many
   days (the receipt itself stays).
-- Delete a whole household: `python3 server.py tenant delete <id> --yes`, or *Verwijderen* in the admin dashboard, removes
-  its database and all its photos (server operators, see [server/README.md](server/README.md#households-more-than-one-group)). Backups you made
+- Delete a whole user: `python3 server.py tenant delete <id> --yes`, or *Verwijderen* in the admin dashboard, removes
+  its database and all its photos (server operators, see [server/README.md](server/README.md#users-more-than-one-person)). Backups you made
   of the state folder are not touched: delete those too.
 - Delete everything: stop the server and delete its `state/` folder (and `.env`).
 - Log out of Albert Heijn: the tokens are removed from the server.
 
 ## If you run a server for other people
 
-Every household you add is another group of people whose data you hold. You decide what is stored and why, so you are responsible for that data (under the GDPR you are the data
+Every user you add brings more people whose data you hold (that user and the housemates they split with). You decide what is stored and why, so you are responsible for that data (under the GDPR you are the data
 controller for what your server holds about them). Tell the people who use your server what is stored and that
 photos go to Google, keep access to it limited to them, and delete their data when they ask. Do not switch on the
 Albert Heijn integration for other people's use.

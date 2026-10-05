@@ -1,4 +1,4 @@
-"""Households: keys, isolation between them, quotas and limits. Run from server/:  python3 -m unittest discover -s tests"""
+"""Users: keys, isolation between them, quotas and limits. Run from server/:  python3 -m unittest discover -s tests"""
 import contextlib
 import http.client
 import io
@@ -22,7 +22,7 @@ import scanning  # noqa: E402
 import server  # noqa: E402
 import tenants  # noqa: E402
 
-HH = server.HOUSEHOLDS
+HH = server.USERS
 
 
 def tearDownModule():
@@ -30,7 +30,7 @@ def tearDownModule():
 
 
 def scan_for(tenant, scan_id="0123456789abcdef", created_at=None):
-    """A kept scanned receipt with a photo, written straight into one household."""
+    """A kept scanned receipt with a photo, written straight into one user."""
     listing = {"id": "scan_" + scan_id, "dateTime": "2026-01-01T12:00:00", "totalAmount": {"amount": 5.0}, "source": "scan"}
     tenant.photo_path(scan_id + ".jpg").write_bytes(b"photo")
     tenant.save_scan(scan_id, created_at or time.time(), "ok", listing, {"id": listing["id"], "products": []}, {}, [],
@@ -42,13 +42,13 @@ class RegistryTests(unittest.TestCase):
     def setUpClass(cls):
         server.init_db()
 
-    def test_default_household_keeps_the_original_layout(self):
+    def test_default_user_keeps_the_original_layout(self):
         default = HH.default()
         self.assertEqual(default.db_path, server.DATA_DIR / "receipt.db")
         self.assertEqual(default.scan_dir, server.DATA_DIR / "scans")
 
     def test_keys_are_random_and_only_stored_as_a_hash(self):
-        tenant, key = HH.add("Household A")
+        tenant, key = HH.add("User A")
         self.assertTrue(key.startswith("bk_") and len(key) > 40)
         self.assertNotIn(key.encode(), HH.registry_path.read_bytes())
         self.assertEqual(HH.authenticate(key, server.APP_KEY).id, tenant.id)
@@ -86,10 +86,10 @@ class RegistryTests(unittest.TestCase):
             conn = sqlite3.connect(Path(d) / "registry.db")
             conn.execute("CREATE TABLE usage (tenant_id TEXT NOT NULL, month TEXT NOT NULL, scans INTEGER NOT NULL,"
                          " PRIMARY KEY (tenant_id, month))")
-            conn.execute("INSERT INTO usage VALUES ('default', ?, 3)", (tenants.Households._week(),))
+            conn.execute("INSERT INTO usage VALUES ('default', ?, 3)", (tenants.Users._week(),))
             conn.commit()
             conn.close()
-            hh = tenants.Households(Path(d), use_default=True)
+            hh = tenants.Users(Path(d), use_default=True)
             hh.init()
             self.assertEqual(hh.scans_this_week("default"), 3)
 
@@ -104,7 +104,7 @@ class RegistryTests(unittest.TestCase):
         free, _ = HH.add("Free")
         self.assertTrue(all(scan(free, 0) for _ in range(5)))  # 0 = unlimited
         self.assertEqual([scan(free, 6) for _ in range(2)], [True, False])  # the server default applies
-        self.assertTrue(all(scan(HH.default(), 1) for _ in range(3)))  # the built-in household never
+        self.assertTrue(all(scan(HH.default(), 1) for _ in range(3)))  # the built-in user never
 
     def test_old_photos_go_but_the_receipt_stays(self):
         tenant, _ = HH.add("Photos")
@@ -119,9 +119,9 @@ class RegistryTests(unittest.TestCase):
         stats = tenant.stats()
         self.assertEqual((stats["scans"], stats["photos"], stats["people"]), (1, 1, 0))
         self.assertGreater(stats["bytes"], 5)
-        self.assertGreater(HH.default().stats()["bytes"], 0)  # the built-in household is the data folder itself
+        self.assertGreater(HH.default().stats()["bytes"], 0)  # the built-in user is the data folder itself
 
-    def test_server_code_cannot_bypass_the_household(self):
+    def test_server_code_cannot_bypass_the_user(self):
         with open(server.__file__) as f:
             source = f.read()
         for forbidden in ("sqlite3", ".execute(", "DATA_DIR /", "SCAN_DIR"):
@@ -135,8 +135,8 @@ class HttpTests(unittest.TestCase):
         cls.httpd = server.Server(("127.0.0.1", 0), server.Handler)
         cls.port = cls.httpd.server_address[1]
         threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
-        cls.a, cls.key_a = HH.add("Household A")
-        cls.b, cls.key_b = HH.add("Household B")
+        cls.a, cls.key_a = HH.add("User A")
+        cls.b, cls.key_b = HH.add("User B")
 
     @classmethod
     def tearDownClass(cls):
@@ -158,7 +158,7 @@ class HttpTests(unittest.TestCase):
         conn.close()
         return resp.status, data
 
-    def test_households_cannot_see_each_others_data(self):
+    def test_users_cannot_see_each_others_data(self):
         _, body = self.call("GET", "/api/data", key=self.key_a)
         status, _ = self.call("PUT", "/api/data", {"data": {"people": ["Only A"]}, "baseVersion": body["version"]}, key=self.key_a)
         self.assertEqual(status, 200)
@@ -166,7 +166,7 @@ class HttpTests(unittest.TestCase):
         self.assertNotIn("Only A", json.dumps(self.call("GET", "/api/data", key=self.key_b)[1]))
         self.assertNotIn("Only A", json.dumps(self.call("GET", "/api/data", key=server.APP_KEY)[1]))
 
-    def test_households_cannot_reach_each_others_scans(self):
+    def test_users_cannot_reach_each_others_scans(self):
         scan_for(self.a, "aaaaaaaaaaaaaaaa")
         mine = self.call("GET", "/api/receipts", key=self.key_a)[1]["receipts"]
         self.assertEqual([r["id"] for r in mine], ["scan_aaaaaaaaaaaaaaaa"])
@@ -180,13 +180,13 @@ class HttpTests(unittest.TestCase):
         self.assertTrue(self.a.photo_path("aaaaaaaaaaaaaaaa.jpg").exists())  # B's DELETE did nothing
         self.assertEqual(self.call("GET", "/api/scans/aaaaaaaaaaaaaaaa/image", key=self.key_a)[0], 200)
 
-    def test_payee_is_per_household(self):
+    def test_payee_is_per_user(self):
         self.assertIsNone(self.call("GET", "/api/auth/status", key=self.key_b)[1]["payee"])
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            code = tenants.cli(HH, ["payee", self.b.id, "nl91 abna 0417 1643 00", "Household B"], server.iban_valid)
+            code = tenants.cli(HH, ["payee", self.b.id, "nl91 abna 0417 1643 00", "User B"], server.iban_valid)
         self.assertEqual(code, 0)
-        self.assertEqual(self.call("GET", "/api/auth/status", key=self.key_b)[1]["payee"]["name"], "Household B")
+        self.assertEqual(self.call("GET", "/api/auth/status", key=self.key_b)[1]["payee"]["name"], "User B")
         self.assertIsNone(self.call("GET", "/api/auth/status", key=self.key_a)[1]["payee"])
 
     def test_big_bodies_are_refused(self):
@@ -206,8 +206,8 @@ class HttpTests(unittest.TestCase):
             for _ in held:
                 server._scan_slots.release()
 
-    def test_a_household_is_rate_limited_alone(self):
-        server.REQUESTS = server.Limiter(60)  # other tests used this household's budget
+    def test_a_user_is_rate_limited_alone(self):
+        server.REQUESTS = server.Limiter(60)  # other tests used this user's budget
         HH.update(self.a.id, request_limit=3)
         try:
             codes = [self.call("GET", "/api/data", key=self.key_a)[0] for _ in range(5)]
@@ -260,13 +260,13 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(HH.scans_this_week(tenant.id), 1)
         self.assertEqual(list(tenant.scan_dir.iterdir()), [])  # and nothing was kept
 
-    def test_one_scan_at_a_time_per_household(self):
+    def test_one_scan_at_a_time_per_user(self):
         self.a.scan_lock.acquire()
         try:
             status, body = self.call("POST", "/api/scans", {"image": "aGk=", "mimeType": "image/jpeg"}, key=self.key_a)
             self.assertEqual((status, body["error"]), (429, "scan_busy"))
             status, body = self.call("POST", "/api/scans", {"image": "aGk=", "mimeType": "image/jpeg"}, key=self.key_b)
-            self.assertEqual(body["error"], "gemini_not_configured")  # another household is not held up
+            self.assertEqual(body["error"], "gemini_not_configured")  # another user is not held up
         finally:
             self.a.scan_lock.release()
 
@@ -289,7 +289,7 @@ class HttpTests(unittest.TestCase):
             self.assertEqual(tenants.cli(HH, ["add", "X", "--scans", "-1"], server.iban_valid), 1)
             self.assertEqual(tenants.cli(HH, ["limit", self.a.id, "week", "-1"], server.iban_valid), 1)
 
-    def test_each_household_has_its_own_albert_heijn_login(self):
+    def test_each_user_has_its_own_albert_heijn_login(self):
         old, server.USE_AH_API = server.USE_AH_API, True
         try:
             self.assertEqual(self.call("POST", "/api/auth/begin", key=self.key_a)[0], 200)  # A opens its login window
@@ -317,19 +317,19 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(self.call("GET", "/api/data", key=key)[0], 401)
 
 
-    def test_per_household_ah_override(self):
+    def test_per_user_ah_override(self):
         old, server.USE_AH_API = server.USE_AH_API, True
         try:
             # Default: follows global (True)
             self.assertTrue(self.call("GET", "/api/auth/status", key=self.key_a)[1]["ahEnabled"])
-            # Disable AH for household A
+            # Disable AH for user A
             HH.update(self.a.id, ah_enabled=0)
             self.assertFalse(self.call("GET", "/api/auth/status", key=self.key_a)[1]["ahEnabled"])
             # B still follows global
             self.assertTrue(self.call("GET", "/api/auth/status", key=self.key_b)[1]["ahEnabled"])
             # Auth routes blocked for A
             self.assertEqual(self.call("POST", "/api/auth/begin", key=self.key_a)[0], 404)
-            # RECEIPT_USE_AH_API leads: with it off, switching a household on does nothing
+            # RECEIPT_USE_AH_API leads: with it off, switching a user on does nothing
             server.USE_AH_API = False
             HH.update(self.a.id, ah_enabled=1)
             self.assertFalse(self.call("GET", "/api/auth/status", key=self.key_a)[1]["ahEnabled"])

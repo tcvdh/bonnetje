@@ -1,9 +1,9 @@
-"""Households (tenants): who may connect, and where each household's data lives.
+"""Users (tenants): who may connect, and where each user's data lives.
 
-Every household gets its own private folder with its own SQLite database and photos, so one household's
-requests can only ever open that household's files: there is no shared table to leak from.
+Every user gets its own private folder with its own SQLite database and photos, so one user's
+requests can only ever open that user's files: there is no shared table to leak from.
 
-* `default`  the household of RECEIPT_APP_KEY. It uses the original layout (DATA_DIR/receipt.db and
+* `default`  the user of RECEIPT_APP_KEY. It uses the original layout (DATA_DIR/receipt.db and
              DATA_DIR/scans), so a server that started with one key keeps working, data and all.
 * others     created with `python3 server.py tenant add "Name"`; folder DATA_DIR/tenants/<id>/.
              Their keys are random, shown once and only stored as a hash in DATA_DIR/registry.db.
@@ -46,15 +46,15 @@ def _hash(key: str) -> str:
 
 
 class Tenant:
-    """One household: its folder, database and photos. Created only by `Households`, one object per household."""
+    """One user: its folder, database and photos. Created only by `Users`, one object per user."""
 
     def __init__(self, tid: str, name: str, root: Path):
         if tid != DEFAULT_ID and not ID_RE.fullmatch(tid):
-            raise ValueError("bad household id")
+            raise ValueError("bad user id")
         self.id, self.name = tid, name
         self.db_path = root / "receipt.db"
         self.scan_dir = root / "scans"
-        # Per-household overrides from the registry; None = the server-wide default, 0 = unlimited.
+        # Per-user overrides from the registry; None = the server-wide default, 0 = unlimited.
         self.scan_limit: int | None = None     # Gemini scans per week
         self.request_limit: int | None = None  # requests per minute
         self.scan_rate: int | None = None      # scans per minute
@@ -122,7 +122,7 @@ class Tenant:
             c.execute("UPDATE app_data SET version = ?, json = ? WHERE id = 1", (new_version, json.dumps(data)))
             return True, data, new_version
 
-    # -- settings (where this household's housemates pay)
+    # -- settings (where this user's housemates pay)
     def get_setting(self, key: str):
         with self.db() as c:
             row = c.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
@@ -196,8 +196,8 @@ class Tenant:
             self.photo_path(r["image_file"]).unlink(missing_ok=True)  # the receipt stays, only the photo goes
 
     def stats(self) -> dict:
-        """What this household holds, for the admin dashboard."""
-        # ponytail: parses the household's data and walks its photos; fine for hundreds of households, cache it beyond that
+        """What this user holds, for the admin dashboard."""
+        # ponytail: parses the user's data and walks its photos; fine for hundreds of users, cache it beyond that
         data, version = self.read_data()
         with self.db() as c:
             scans = c.execute("SELECT status, COUNT(*) AS n FROM scans GROUP BY status").fetchall()
@@ -237,7 +237,7 @@ class Tenant:
             row = c.execute("SELECT json, fetched_at FROM ah_cache WHERE key = ?", (key,)).fetchone()
         return (json.loads(row["json"]), row["fetched_at"]) if row else (None, 0.0)
 
-    # -- Albert Heijn login of this household (only used with RECEIPT_USE_AH_API=true)
+    # -- Albert Heijn login of this user (only used with RECEIPT_USE_AH_API=true)
     def load_auth(self):
         with self.db() as c:
             return c.execute("SELECT access, refresh, expires_at FROM ah_auth WHERE id = 1").fetchone()
@@ -257,7 +257,7 @@ class Tenant:
 
     # A login code is only accepted shortly after a login was started from the server's own page.
     # Otherwise any web page could hand your browser (and the appie:// helper) a code from an attacker's
-    # Albert Heijn account and quietly switch the household over to it.
+    # Albert Heijn account and quietly switch the user over to it.
     def begin_login(self, window: float) -> None:
         with self._login_lock:
             self._login_open_until = time.time() + window
@@ -271,8 +271,8 @@ class Tenant:
             self._login_open_until = 0.0
 
 
-class Households:
-    """The registry: which key belongs to which household, plus scan usage per week."""
+class Users:
+    """The registry: which key belongs to which user, plus scan usage per week."""
 
     def __init__(self, data_dir: Path, use_default: bool):
         self.data_dir = Path(data_dir)
@@ -320,9 +320,9 @@ class Households:
         for tenant in self.all():
             tenant.init()
 
-    # -- looking households up
+    # -- looking users up
     def _get(self, tid: str, name: str, root: Path) -> Tenant:
-        with self._lock:  # one object per household: it holds that household's locks
+        with self._lock:  # one object per user: it holds that user's locks
             if tid not in self._tenants:
                 self._tenants[tid] = Tenant(tid, name, root)
             return self._tenants[tid]
@@ -342,12 +342,12 @@ class Households:
             return c.execute("SELECT * FROM tenants ORDER BY created_at").fetchall()
 
     def all(self) -> list[Tenant]:
-        """Every household that may currently use the server."""
+        """Every user that may currently use the server."""
         active = [self._registered(r) for r in self.rows() if not r["disabled"]]
         return ([self.default()] if self.use_default else []) + active
 
     def authenticate(self, key: str, env_key: str) -> Tenant | None:
-        """The household this key belongs to, or None. Keys are 256-bit random, so hashing them and looking
+        """The user this key belongs to, or None. Keys are 256-bit random, so hashing them and looking
         the hash up leaks nothing useful; the env key is compared in constant time."""
         if not key:
             return None
@@ -357,10 +357,10 @@ class Households:
             row = c.execute("SELECT * FROM tenants WHERE key_hash = ? AND disabled = 0", (_hash(key),)).fetchone()
         return self._registered(row) if row else None
 
-    # -- managing households (the `tenant` command)
+    # -- managing users (the `tenant` command)
     @staticmethod
     def clean_name(name: str) -> str:
-        return re.sub(r"[\x00-\x1f]", " ", str(name)).strip()[:60] or "household"
+        return re.sub(r"[\x00-\x1f]", " ", str(name)).strip()[:60] or "user"
 
     def add(self, name: str, scan_limit: int | None = None, request_limit: int | None = None,
             scan_rate: int | None = None, ah_enabled: int | None = None) -> tuple[Tenant, str]:
@@ -395,7 +395,7 @@ class Households:
     def update(self, tid: str, **fields) -> None:
         self.row(tid)
         if not set(fields) <= {"name", "disabled", "scan_limit", "request_limit", "scan_rate", "ah_enabled"}:
-            raise ValueError("unknown household field")
+            raise ValueError("unknown user field")
         if "name" in fields:
             fields["name"] = self.clean_name(fields["name"])
         with self._reg() as c:
@@ -403,7 +403,7 @@ class Households:
                 c.execute(f"UPDATE tenants SET {column} = ? WHERE id = ?", (value, tid))
 
     def delete(self, tid: str) -> None:
-        """Removes the household and everything it stored: registry row, database, photos."""
+        """Removes the user and everything it stored: registry row, database, photos."""
         self.row(tid)
         with self._reg() as c:
             for table, column in (("tenants", "id"), ("usage", "tenant_id"), ("seen", "tenant_id")):
@@ -428,7 +428,7 @@ class Households:
         return row["n"]
 
     def touch(self, tid: str) -> None:
-        """Remembers that this household just used the server (written at most once a minute)."""
+        """Remembers that this user just used the server (written at most once a minute)."""
         now = time.time()
         if now - self._seen.get(tid, 0) < 60:
             return
@@ -464,13 +464,13 @@ class Households:
         self._settings_cache = (0.0, {})
 
     def scans_left(self, tenant: Tenant, default_limit: int) -> bool:
-        """False when this household used up its weekly scan limit. The default household is never limited.
-        0 means unlimited. Checked before a scan and counted after it; one scan at a time per household keeps that exact."""
+        """False when this user used up its weekly scan limit. The default user is never limited.
+        0 means unlimited. Checked before a scan and counted after it; one scan at a time per user keeps that exact."""
         limit = 0 if tenant.id == DEFAULT_ID else (tenant.scan_limit if tenant.scan_limit is not None else default_limit)
         return not limit or self.scans_this_week(tenant.id) < limit
 
     def count_scan(self, tenant: Tenant) -> None:
-        """Counts one scan that Gemini answered, for this household this week."""
+        """Counts one scan that Gemini answered, for this user this week."""
         with self._reg() as c:
             c.execute(
                 "INSERT INTO usage (tenant_id, week, scans) VALUES (?, ?, 1) "
@@ -503,26 +503,26 @@ def clean_bunq(raw) -> str:
     return handle
 
 
-USAGE = """Households (each has its own key and its own private data):
+USAGE = """Users (each has its own key and its own private data):
   python3 server.py tenant add "Name" [--scans N]   create one; prints its key once
-  python3 server.py tenant list                     all households and this week's scans
+  python3 server.py tenant list                     all users and this week's scans
   python3 server.py tenant rotate ID                new key (the old one stops working)
-  python3 server.py tenant revoke ID | enable ID    switch a household off / on
+  python3 server.py tenant revoke ID | enable ID    switch a user off / on
   python3 server.py tenant limit ID week|requests|rate N|default
                                                     scans per week / requests per minute / scans per minute
                                                     (0 = unlimited, default = the server-wide value)
-  python3 server.py tenant ah ID on|off|default     Albert Heijn for this household (only does something when
+  python3 server.py tenant ah ID on|off|default     Albert Heijn for this user (only does something when
                                                     RECEIPT_USE_AH_API=true; off then switches it off for them)
   python3 server.py tenant payee ID [IBAN "Name"] [--bunq HANDLE] [--clear]
-                                                    where this household's housemates pay: IBAN + name (QR code),
+                                                    where this user's housemates pay: IBAN + name (QR code),
                                                     a bunq.me handle (share link), or both. What you leave out stays
                                                     as it was; --bunq "" removes the handle, --clear removes all
-  python3 server.py tenant delete ID --yes          delete the household and ALL its data
+  python3 server.py tenant delete ID --yes          delete the user and ALL its data
 With Docker:  docker exec -u bonnetje bonnetje python3 server.py tenant ...
 """
 
 
-def cli(hh: Households, args: list[str], iban_valid) -> int:
+def cli(hh: Users, args: list[str], iban_valid) -> int:
     if os.geteuid() == 0 and hh.data_dir.exists() and hh.data_dir.stat().st_uid != 0:
         print("Run this as the user that owns the data folder (Docker: docker exec -u bonnetje ...), "
               "or the files it creates cannot be used by the server.", file=sys.stderr)
@@ -533,8 +533,8 @@ def cli(hh: Households, args: list[str], iban_valid) -> int:
         if cmd == "add" and len(args) in (2, 4) and (len(args) == 2 or args[2] == "--scans"):
             limit = whole_number(args[3]) if len(args) == 4 else None
             tenant, key = hh.add(args[1], limit)
-            print(f"Household created: {tenant.name}\n  id:  {tenant.id}\n  key: {key}\n"
-                  "The key is shown only once; give it to the household (it goes into the app).")
+            print(f"User created: {tenant.name}\n  id:  {tenant.id}\n  key: {key}\n"
+                  "The key is shown only once; give it to the user (it goes into the app).")
         elif cmd == "list":
             print(f"{'id':<18}{'name':<24}{'state':<10}{'scans (week)':<15}limit")
             if hh.use_default:
@@ -588,12 +588,12 @@ def cli(hh: Households, args: list[str], iban_valid) -> int:
             print("Done.")
         elif cmd == "delete" and len(args) == 3 and args[2] == "--yes":
             hh.delete(args[1])
-            print("Household and all its data deleted.")
+            print("User and all its data deleted.")
         else:
             print(USAGE)
             return 1
     except KeyError:
-        print("No such household. See: python3 server.py tenant list", file=sys.stderr)
+        print("No such user. See: python3 server.py tenant list", file=sys.stderr)
         return 1
     except ValueError as e:
         print(f"Invalid input: {e}", file=sys.stderr)

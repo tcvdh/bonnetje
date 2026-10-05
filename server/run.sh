@@ -25,7 +25,7 @@ export RECEIPT_DATA_DIR="${RECEIPT_DATA_DIR:-$PWD/state}"
 ip=$(python3 -c 'import socket; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("10.255.255.255", 1)); print(s.getsockname()[0])' 2>/dev/null || echo localhost)
 echo
 echo "  Server:  http://${ip}:${RECEIPT_PORT:-3000}   (server page; AH login there when RECEIPT_USE_AH_API=true)"
-echo "  Key:     ${RECEIPT_APP_KEY:-(none: households only)}"
+echo "  Key:     ${RECEIPT_APP_KEY:-(none: only users made with tenant add)}"
 [ -n "${RECEIPT_ADMIN_PORT:-}" ] && [ -n "${RECEIPT_ADMIN_KEY:-}" ] && echo "  Admin:   http://${ip}:${RECEIPT_ADMIN_PORT}   (keep it on your LAN)"
 echo
 

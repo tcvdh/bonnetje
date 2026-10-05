@@ -1,33 +1,33 @@
 """Bonnetje Splitter server.
 
-One process that owns everything the phone used to keep locally, for one or more households:
+One process that owns everything the phone used to keep locally, for one or more users:
 
-* the split data (assignments, paid, completed, hidden) in SQLite, one private database per household
+* the split data (assignments, paid, completed, hidden) in SQLite, one private database per user
 * receipt photos read with Gemini
-* optionally (RECEIPT_USE_AH_API=true, self-hosting only) each household's own Albert Heijn login, refreshed
+* optionally (RECEIPT_USE_AH_API=true, self-hosting only) each user's own Albert Heijn login, refreshed
   in the background so it never lapses, and a thin proxy for AH receipts, so clients never see AH tokens
 
-A household is whoever holds its key: RECEIPT_APP_KEY is the built-in one, more are made with
+A user is whoever holds its key: RECEIPT_APP_KEY is the built-in one, more are made with
 `python3 server.py tenant add "Name"` (see tenants.py and the README). Standard library only (Python 3.9+).
 Configure with environment variables:
 
-  RECEIPT_APP_KEY   the key of the built-in household (optional when you add households with `tenant add`).
+  RECEIPT_APP_KEY   the key of the built-in user (optional when you add users with `tenant add`).
                     Sent by the app as `Authorization: Bearer <key>`
   RECEIPT_HOST      default 0.0.0.0
   RECEIPT_PORT      default 3000
   RECEIPT_DATA_DIR  default ./state  (registry, databases and photos live here)
   RECEIPT_USE_AH_API  default false. true switches on the unofficial Albert Heijn integration (see README);
-                      only then can a household have it (`tenant ah` / the dashboard can switch it off per household)
+                      only then can a user have it (`tenant ah` / the dashboard can switch it off per user)
   RECEIPT_AH_API    default https://api.ah.nl (override for tests)
   RECEIPT_GEMINI_KEY    Gemini API key; without it scanning is switched off
   RECEIPT_GEMINI_MODEL  default gemini-3.8-flash
   RECEIPT_SCAN_PROMPT   path to the scan prompt (default ./scan_prompt.txt)
-  RECEIPT_IBAN      the IBAN of the built-in household, where housemates pay (payment QR code in the app)
+  RECEIPT_IBAN      the IBAN of the built-in user, where housemates pay (payment QR code in the app)
   RECEIPT_NAME      the name on that account
   RECEIPT_BUNQ      optional bunq.me handle: the app then also offers a shareable bunq.me payment link
-  RECEIPT_REQUESTS_PER_MINUTE  default 120: requests per minute per household (0 = unlimited)
-  RECEIPT_SCANS_PER_MINUTE     default 5: Gemini scans per minute per household (0 = unlimited)
-  RECEIPT_SCANS_PER_WEEK   default 25: Gemini scans per week for households from `tenant add` (0 = unlimited)
+  RECEIPT_REQUESTS_PER_MINUTE  default 120: requests per minute per user (0 = unlimited)
+  RECEIPT_SCANS_PER_MINUTE     default 5: Gemini scans per minute per user (0 = unlimited)
+  RECEIPT_SCANS_PER_WEEK   default 25: Gemini scans per week for users from `tenant add` (0 = unlimited)
   RECEIPT_PHOTO_DAYS       default 0 (keep): delete photos of kept receipts after this many days
                            (these four can also be changed live in the admin dashboard, which wins over the environment)
   RECEIPT_ADMIN_PORT, RECEIPT_ADMIN_KEY  turn on the admin dashboard (see admin.py); RECEIPT_ADMIN_HOST default 0.0.0.0
@@ -79,7 +79,7 @@ ADMIN_KEY = os.environ.get("RECEIPT_ADMIN_KEY", "")
 TRUSTED_PROXIES = {p.strip() for p in os.environ.get("RECEIPT_TRUSTED_PROXY", "").split(",") if p.strip()}
 CORS_ORIGIN = os.environ.get("RECEIPT_CORS_ORIGIN", "*")
 
-HOUSEHOLDS = tenants.Households(DATA_DIR, use_default=bool(APP_KEY))
+USERS = tenants.Users(DATA_DIR, use_default=bool(APP_KEY))
 
 AH_HEADERS = {"Content-Type": "application/json", "User-Agent": "Appie/8.22.3"}
 AH_LOGIN_URL = (
@@ -100,7 +100,7 @@ AUTH_FAIL_WINDOW = 60         # ... within this many seconds
 
 # Limits that can be changed while running: the admin dashboard wins over the environment, which wins over these.
 LIMIT_SETTINGS = {  # name: (environment variable, built-in default)
-    "requests_per_minute": ("RECEIPT_REQUESTS_PER_MINUTE", 120),  # a busy household opening the app: ~30 in a burst
+    "requests_per_minute": ("RECEIPT_REQUESTS_PER_MINUTE", 120),  # a busy user opening the app: ~30 in a burst
     "scans_per_minute": ("RECEIPT_SCANS_PER_MINUTE", 5),
     "scans_per_week": ("RECEIPT_SCANS_PER_WEEK", 25),
     "photo_days": ("RECEIPT_PHOTO_DAYS", 0),                      # 0 = keep photos
@@ -110,7 +110,7 @@ STARTED = time.time()
 
 
 def setting(name: str) -> int:
-    stored = HOUSEHOLDS.settings().get(name)
+    stored = USERS.settings().get(name)
     if stored is not None:
         return int(stored)
     env, default = LIMIT_SETTINGS[name]
@@ -118,7 +118,7 @@ def setting(name: str) -> int:
 
 
 def setting_source(name: str) -> str:
-    if HOUSEHOLDS.settings().get(name) is not None:
+    if USERS.settings().get(name) is not None:
         return "dashboard"
     return "environment" if os.environ.get(LIMIT_SETTINGS[name][0], "") else "built-in"
 
@@ -149,8 +149,8 @@ def iban_valid(iban: str) -> bool:
 
 def payee(tenant: Tenant) -> dict | None:
     """Where housemates pay: the QR code needs {iban, name}, the share link a bunq handle; either alone is fine.
-    The two are chosen separately: a household's own value (`tenant payee`, dashboard) wins, and the built-in
-    household falls back to RECEIPT_IBAN + RECEIPT_NAME / RECEIPT_BUNQ. None when neither is set up."""
+    The two are chosen separately: a user's own value (`tenant payee`, dashboard) wins, and the built-in
+    user falls back to RECEIPT_IBAN + RECEIPT_NAME / RECEIPT_BUNQ. None when neither is set up."""
     own = tenant.get_setting("payee") or {}
     default = tenant.id == tenants.DEFAULT_ID
     out = {}
@@ -165,7 +165,7 @@ def payee(tenant: Tenant) -> dict | None:
 
 
 def init_db() -> None:
-    HOUSEHOLDS.init()
+    USERS.init()
 
 
 # ── Scanned receipts ─────────────────────────────────────────────────────
@@ -179,11 +179,11 @@ def run_scan(tenant: Tenant, scan_id: str, image: bytes, mime: str, created_at: 
     rate = tenant.scan_rate if tenant.scan_rate is not None else setting("scans_per_minute")
     if rate and not SCAN_LIMITER.take(tenant.id, rate):
         raise scanning.ScanError("scan_rate_limited", "Je scant te snel. Wacht even en probeer het opnieuw.", 429)
-    if not HOUSEHOLDS.scans_left(tenant, setting("scans_per_week")):
+    if not USERS.scans_left(tenant, setting("scans_per_week")):
         raise scanning.ScanError("scan_quota", "Je scanlimiet voor deze week is bereikt.", 429)
 
     def count() -> None:
-        HOUSEHOLDS.count_scan(tenant)
+        USERS.count_scan(tenant)
         STATS["scans"] += 1
 
     try:
@@ -191,7 +191,7 @@ def run_scan(tenant: Tenant, scan_id: str, image: bytes, mime: str, created_at: 
     except scanning.ScanError as e:
         if e.answered:  # Gemini read it (and that cost a call), it just was no usable receipt
             count()
-        raise  # otherwise the server or Gemini failed: that is not the household's scan
+        raise  # otherwise the server or Gemini failed: that is not the user's scan
     count()
     today = time.strftime("%Y-%m-%d")
     listing, detail = scanning.to_app_shapes(scan_id_to_receipt_id(scan_id), scan, warnings, today)
@@ -207,7 +207,7 @@ def run_scan(tenant: Tenant, scan_id: str, image: bytes, mime: str, created_at: 
     return body
 
 
-# ── Albert Heijn auth (per household) ────────────────────────────────────
+# ── Albert Heijn auth (per user) ────────────────────────────────────
 
 class AHError(Exception):
     def __init__(self, code: str, status: int = 502):
@@ -242,15 +242,15 @@ def refresh_tokens(tenant: Tenant, force: bool = False) -> bool:
                 "/mobile-auth/v1/auth/token/refresh",
                 {"clientId": "appie", "refreshToken": row["refresh"]},
             ))
-            log.info("AH token refreshed (household %s)", tenant.id)
+            log.info("AH token refreshed (user %s)", tenant.id)
             return True
         except urllib.error.HTTPError as e:
-            log.warning("AH token refresh rejected for household %s: %s %s", tenant.id, e.code, e.reason)
+            log.warning("AH token refresh rejected for user %s: %s %s", tenant.id, e.code, e.reason)
             if e.code in (400, 401, 403):
                 tenant.clear_auth()  # the refresh token is dead; a fresh login is needed
             return False
         except Exception as e:  # network trouble: keep tokens, try again later
-            log.warning("AH token refresh failed for household %s: %s", tenant.id, e)
+            log.warning("AH token refresh failed for user %s: %s", tenant.id, e)
             return False
 
 
@@ -321,26 +321,26 @@ def auth_status(tenant: Tenant) -> dict:
 
 
 def keepalive_loop() -> None:
-    """Refresh every household's AH token before it expires so the logins never lapse."""
+    """Refresh every user's AH token before it expires so the logins never lapse."""
     while True:
-        for tenant in HOUSEHOLDS.all():  # ponytail: scans every household each minute; fine for a self-hosted handful
+        for tenant in USERS.all():  # ponytail: scans every user each minute; fine for a self-hosted handful
             try:
                 row = tenant.load_auth()
                 if row and row["expires_at"] - time.time() < REFRESH_MARGIN:
                     refresh_tokens(tenant)
             except Exception:
-                log.exception("keepalive failed for household %s", tenant.id)
+                log.exception("keepalive failed for user %s", tenant.id)
         time.sleep(60)
 
 
 def housekeeping_loop() -> None:
-    """Drops old drafts (and, when RECEIPT_PHOTO_DAYS is set, old photos) of every household."""
+    """Drops old drafts (and, when RECEIPT_PHOTO_DAYS is set, old photos) of every user."""
     while True:
-        for tenant in HOUSEHOLDS.all():
+        for tenant in USERS.all():
             try:
                 tenant.purge(DRAFT_TTL, setting("photo_days"))
             except Exception:
-                log.exception("housekeeping failed for household %s", tenant.id)
+                log.exception("housekeeping failed for user %s", tenant.id)
         time.sleep(HOUSEKEEPING_EVERY)
 
 
@@ -365,7 +365,7 @@ _scan_slots = threading.BoundedSemaphore(MAX_SCANS_AT_ONCE)
 
 @contextlib.contextmanager
 def scan_slot(tenant: Tenant):
-    """One scan at a time per household (one person scans, and its weekly limit is checked and counted without a
+    """One scan at a time per user (one person scans, and its weekly limit is checked and counted without a
     race), and at most MAX_SCANS_AT_ONCE on the whole server, so a burst of big photos cannot exhaust memory."""
     if not tenant.scan_lock.acquire(blocking=False):
         raise scanning.ScanError("scan_busy", "Je bent al een bonnetje aan het scannen. Wacht tot dat klaar is.", 429)
@@ -427,7 +427,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _authenticate(self) -> Tenant | None:
         header = self.headers.get("Authorization", "")
-        return HOUSEHOLDS.authenticate(header[7:] if header.startswith("Bearer ") else "", APP_KEY)
+        return USERS.authenticate(header[7:] if header.startswith("Bearer ") else "", APP_KEY)
 
     def log_message(self, fmt, *args):  # route through logging
         log.info("%s [%s] %s", self._client_ip(), self.tenant.id if self.tenant else "-", fmt % args)
@@ -463,7 +463,7 @@ class Handler(BaseHTTPRequestHandler):
                 STATS["unauthorized"] += 1
                 AUTH_FAILURES.add(ip)
                 return self._json({"error": "unauthorized"}, 401)
-            HOUSEHOLDS.touch(self.tenant.id)
+            USERS.touch(self.tenant.id)
             limit = self.tenant.request_limit if self.tenant.request_limit is not None else setting("requests_per_minute")
             if limit and not REQUESTS.take(self.tenant.id, limit):
                 STATS["rateLimited"] += 1
@@ -490,7 +490,7 @@ class Handler(BaseHTTPRequestHandler):
         self._json({"error": "not_found"}, 404)
 
     def _ah_for_tenant(self) -> bool:
-        """RECEIPT_USE_AH_API decides: when it is off, no household has AH; when on, a household can be switched off."""
+        """RECEIPT_USE_AH_API decides: when it is off, no user has AH; when on, a user can be switched off."""
         return USE_AH_API and self.tenant.ah_enabled is not False
 
     def _route_auth(self, method: str, path: str) -> bool:
@@ -584,7 +584,7 @@ class Handler(BaseHTTPRequestHandler):
         if not m:
             return False
         scan_id, action = m.group(1), m.group(2)
-        row = tenant.scan(scan_id)  # this household's own database: another household's scan simply isn't there
+        row = tenant.scan(scan_id)  # this user's own database: another user's scan simply isn't there
         if not row:
             self._json({"error": "not_found"}, 404)
         elif action == "accept" and method == "POST":
@@ -688,7 +688,7 @@ def server_info() -> dict:
         "uptimeSeconds": int(time.time() - STARTED), "ahEnabled": USE_AH_API,
         "geminiEnabled": bool(scanning.GEMINI_KEY), "geminiModel": scanning.GEMINI_MODEL,
         "dataDir": str(DATA_DIR), "port": PORT, "maxConnections": MAX_CONNECTIONS,
-        "corsOrigin": CORS_ORIGIN, "trustedProxies": sorted(TRUSTED_PROXIES), "builtinHousehold": HOUSEHOLDS.use_default,
+        "corsOrigin": CORS_ORIGIN, "trustedProxies": sorted(TRUSTED_PROXIES), "builtinUser": USERS.use_default,
     }
 
 
@@ -700,22 +700,22 @@ def main() -> None:
         if value and not value.isdigit():
             sys.exit(f"{env} must be a whole number (0 or more), not {value!r}. Check your .env file.")
     if len(sys.argv) > 1 and sys.argv[1] == "tenant":
-        sys.exit(tenants.cli(HOUSEHOLDS, sys.argv[2:], iban_valid))
+        sys.exit(tenants.cli(USERS, sys.argv[2:], iban_valid))
     try:
-        HOUSEHOLDS.init()
+        USERS.init()
     except OSError as e:
         sys.exit(f"Cannot write to the data folder {DATA_DIR}: {e}. The server runs as an unprivileged user; "
                  "make the folder writable for it (Docker: chown -R 10001:10001 state).")
-    if not HOUSEHOLDS.use_default and not HOUSEHOLDS.rows():
-        sys.exit("No household yet. Set RECEIPT_APP_KEY (a password of your choice; make one with: "
+    if not USERS.use_default and not USERS.rows():
+        sys.exit("No user yet. Set RECEIPT_APP_KEY (a password of your choice; make one with: "
                  "python3 -c 'import secrets; print(secrets.token_urlsafe(32))'), "
-                 "or create households with: python3 server.py tenant add \"Name\"")
-    if HOUSEHOLDS.use_default and payee(HOUSEHOLDS.default()) is None:
+                 "or create users with: python3 server.py tenant add \"Name\"")
+    if USERS.use_default and payee(USERS.default()) is None:
         log.warning(
             "RECEIPT_IBAN / RECEIPT_NAME are %s: the app cannot show a payment QR code.",
             "invalid" if PAYEE_IBAN and not iban_valid(PAYEE_IBAN) else "not set",
         )
-    for tenant in HOUSEHOLDS.all():
+    for tenant in USERS.all():
         tenant.purge(DRAFT_TTL, setting("photo_days"))
     threading.Thread(target=housekeeping_loop, daemon=True).start()
     if USE_AH_API:
@@ -726,7 +726,7 @@ def main() -> None:
         log.warning("RECEIPT_ADMIN_PORT is set but RECEIPT_ADMIN_KEY is not: the admin dashboard stays off.")
     elif ADMIN_PORT:
         admin.serve(ADMIN_HOST, ADMIN_PORT, ADMIN_KEY, SimpleNamespace(
-            households=HOUSEHOLDS, stats=STATS, setting=setting, setting_source=setting_source,
+            users=USERS, stats=STATS, setting=setting, setting_source=setting_source,
             iban_valid=iban_valid, info=server_info,
         ))
         log.info("Admin dashboard on http://%s:%s", ADMIN_HOST, ADMIN_PORT)

@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import server  # noqa: E402
 
-TENANT = server.HOUSEHOLDS.default()
+TENANT = server.USERS.default()
 
 
 def tearDownModule():

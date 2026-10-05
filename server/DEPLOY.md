@@ -47,7 +47,7 @@ RECEIPT_GEMINI_KEY=your-gemini-key
 
 | Variable | Needed | What it does |
 |---|---|---|
-| `RECEIPT_APP_KEY` | yes, unless you only use households | The server's password (the built-in household); the app sends it. Any text works, a long random one is safer: `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'` |
+| `RECEIPT_APP_KEY` | yes, unless you only use users made with `tenant add` | The server's password (the built-in user); the app sends it. Any text works, a long random one is safer: `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'` |
 | `RECEIPT_BUNQ` | optional | bunq.me handle: adds a shareable bunq payment link next to the QR code. |
 | `RECEIPT_IBAN`, `RECEIPT_NAME` | for payment QR | Where housemates pay. Without them the app shows a warning instead of a QR code. |
 | `RECEIPT_GEMINI_KEY` | for scanning | Gemini API key; without it, photo scanning is off. Photos are sent to Google (privacy note in [README.md](README.md#scanning-receipts-gemini)). |
@@ -59,17 +59,18 @@ RECEIPT_GEMINI_KEY=your-gemini-key
 
 After changing settings: `docker restart bonnetje` (or `docker compose restart`).
 
-## More households on the same server
+## More users on the same server
 
-One key is one household. To add another group of housemates (own key, own separate data, no restart needed):
+One key is one user: one person who keeps track of what others owe them. To add another (own key, own separate
+data, no restart needed):
 
 ```bash
-docker exec -u bonnetje bonnetje python3 server.py tenant add "Family B" --scans 30
+docker exec -u bonnetje bonnetje python3 server.py tenant add "Alice" --scans 30
 docker exec -u bonnetje bonnetje python3 server.py tenant list
 ```
 
-Give the printed key to that household; they enter your server address and that key in the app. The other commands
-(`rotate`, `revoke`, `payee`, `limit`, `delete`) are in [README.md](README.md#households-more-than-one-group), and the
+Give the printed key to that user; they enter your server address and that key in the app. The other commands
+(`rotate`, `revoke`, `payee`, `limit`, `delete`) are in [README.md](README.md#users-more-than-one-person), and the
 [dashboard](#admin-dashboard-lan-only) does all of it in a web page. Use `-u bonnetje`: the server runs as that unprivileged user, and files created by root could not be used by it.
 
 ## Admin dashboard (LAN only)
@@ -135,6 +136,6 @@ The server is plain HTTP. Put a reverse proxy in front for HTTPS (see `README.md
 
 ## Backup
 
-Everything is in `./state/`: `receipt.db` and `scans/` (the built-in household), `registry.db` and `tenants/` (other
-households). Copy or snapshot that folder while the server is stopped (`docker stop bonnetje`), or take a consistent
-copy of a database while it runs with `sqlite3 receipt.db ".backup copy.db"`. One household alone: its `tenants/<id>/` folder.
+Everything is in `./state/`: `receipt.db` and `scans/` (the built-in user), `registry.db` and `tenants/` (other
+users). Copy or snapshot that folder while the server is stopped (`docker stop bonnetje`), or take a consistent
+copy of a database while it runs with `sqlite3 receipt.db ".backup copy.db"`. One user alone: its `tenants/<id>/` folder.
