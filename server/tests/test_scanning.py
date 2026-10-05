@@ -1,5 +1,7 @@
 """Checks for the receipt scanning rules. Run from server/:  python3 -m unittest discover -s tests"""
 import copy
+import datetime
+import json
 import os
 import sys
 import unittest
@@ -119,6 +121,29 @@ class ScanImageTests(unittest.TestCase):
         scan, issues, warnings = self.scan_with(raw_scan())
         self.assertEqual(scan["storeName"], "Jumbo")
         self.assertEqual((issues, warnings), ([], []))
+
+
+class GeminiRequestTests(unittest.TestCase):
+    def test_request_tells_the_model_todays_date(self):
+        # Without it the model warns that recent receipts are "in the future".
+        sent = {}
+
+        class Done(Exception):
+            pass
+
+        def fake_urlopen(req, timeout):
+            sent["body"] = json.loads(req.data)
+            raise Done
+
+        original_key, original_open = scanning.GEMINI_KEY, scanning.urllib.request.urlopen
+        scanning.GEMINI_KEY, scanning.urllib.request.urlopen = "test", fake_urlopen
+        try:
+            with self.assertRaises(Exception):
+                scanning.call_gemini(b"img", "image/jpeg")
+        finally:
+            scanning.GEMINI_KEY, scanning.urllib.request.urlopen = original_key, original_open
+        text = sent["body"]["contents"][0]["parts"][1]["text"]
+        self.assertIn(datetime.date.today().isoformat(), text)
 
 
 class AppShapeTests(unittest.TestCase):

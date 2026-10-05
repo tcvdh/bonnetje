@@ -30,6 +30,6 @@ Totals
 
 Store and date
 - storeName: the shop name as a person would say it ("Albert Heijn", "HEMA", "Gall & Gall", "Vomar"). Use the brand, not the legal entity or the branch address.
-- purchaseDate as YYYY-MM-DD and purchaseTime as HH:MM (24 hour), or "" if not readable. Dates on Dutch receipts are day-month-year.
+- purchaseDate as YYYY-MM-DD and purchaseTime as HH:MM (24 hour), or "" if not readable. Dates on Dutch receipts are day-month-year. The message tells you today's date: any date up to and including today is normal, even if it is later than what you know from training. Read the date as printed and never add a warning that it looks like the future, is unusual or might be wrong. Only warn about the date if you cannot read it.
 
 Before answering, check your own work: the sum of (lineTotal + deposit - discount) over all items, minus all basketDiscounts, should equal total. If it does not, re-read the receipt for a missed or misread line. If it still does not match, keep what you read and add a warning describing the difference.

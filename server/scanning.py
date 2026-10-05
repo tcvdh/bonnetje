@@ -6,6 +6,7 @@ so changing the prompt, the schema or the checks never touches the HTTP code.
 from __future__ import annotations
 
 import base64
+import datetime
 import json
 import os
 import urllib.error
@@ -85,7 +86,8 @@ def call_gemini(image: bytes, mime_type: str) -> dict:
             "role": "user",
             "parts": [
                 {"inlineData": {"mimeType": mime_type, "data": base64.b64encode(image).decode()}},
-                {"text": "Read this receipt."},
+                # The model's training data ends before today, so recent dates look like the future to it.
+                {"text": f"Today is {datetime.date.today().isoformat()}. Read this receipt."},
             ],
         }],
         "generationConfig": {

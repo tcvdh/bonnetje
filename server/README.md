@@ -209,7 +209,7 @@ Photos of receipts from any store are read by Gemini and turned into receipts yo
 
 How it works, and where to change it:
 
-- **`scan_prompt.txt`** is the instruction Gemini gets (how to treat discounts, deposits, totals, Dutch stores).
+- **`scan_prompt.txt`** is the instruction Gemini gets (how to treat discounts, deposits, totals, Dutch stores). Each request also sends today's date, so the model doesn't flag a recent receipt as being in the future (its training data ends before today). Keep the date rule if you use your own prompt.
   It is re-read on every scan, so edits apply immediately (with Docker, mount your own copy, see [DEPLOY.md](DEPLOY.md)).
 - **`scanning.py`** holds the structured-output schema, the checks, and the conversion to the app's receipt shape.
   Model: `RECEIPT_GEMINI_MODEL` (default `gemini-3.8-flash`).
