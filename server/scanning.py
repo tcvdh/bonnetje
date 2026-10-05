@@ -9,6 +9,7 @@ import base64
 import datetime
 import json
 import os
+import socket
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -103,7 +104,7 @@ def call_gemini(image: bytes, mime_type: str) -> dict:
     )
 
     last: Exception | None = None
-    for attempt in range(2):  # one retry for transient server errors
+    for attempt in range(2):  # one retry for transient errors, but not after a timeout: that already took 120 s
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
                 payload = json.loads(resp.read())
@@ -121,7 +122,9 @@ def call_gemini(image: bytes, mime_type: str) -> dict:
             if e.code == 400:
                 raise ScanError("gemini_bad_request", f"Gemini weigerde de foto of het verzoek. {detail}".strip(), 502)
             last = e
-        except Exception as e:  # timeouts, DNS, ...
+        except socket.timeout as e:  # TimeoutError on Python 3.10+, its own class on 3.9
+            raise ScanError("gemini_timeout", "Gemini doet er te lang over. Probeer het opnieuw.", 504) from e
+        except Exception as e:  # DNS, connection reset, ...
             last = e
         if attempt == 0:
             continue
@@ -160,6 +163,15 @@ def clean_emoji(value) -> str:
     return e
 
 
+def _when(value, fmt: str) -> str:
+    """The value written exactly in this format ("9:05" becomes "09:05"), or "" when it is not a real
+    date/time (then it counts as not read)."""
+    try:
+        return datetime.datetime.strptime(str(value or "").strip(), fmt).strftime(fmt)
+    except ValueError:
+        return ""
+
+
 def clean(raw: dict) -> dict:
     """Coerce the model output into a predictable shape (never trust types)."""
     def num(v):
@@ -189,8 +201,8 @@ def clean(raw: dict) -> dict:
         "isReceipt": bool(raw.get("isReceipt")),
         "problem": str(raw.get("problem") or "").strip(),
         "storeName": str(raw.get("storeName") or "").strip(),
-        "purchaseDate": str(raw.get("purchaseDate") or "").strip(),
-        "purchaseTime": str(raw.get("purchaseTime") or "").strip(),
+        "purchaseDate": _when(raw.get("purchaseDate"), "%Y-%m-%d"),
+        "purchaseTime": _when(raw.get("purchaseTime"), "%H:%M"),
         "items": items,
         "basketDiscounts": basket,
         "total": r2(num(raw.get("total"))),

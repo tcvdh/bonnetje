@@ -48,6 +48,14 @@ class CleanTests(unittest.TestCase):
         self.assertEqual(cleaned["items"][0]["lineTotal"], 2.0)
         self.assertEqual(cleaned["items"][0]["discount"], 1.0)
 
+    def test_a_date_or_time_that_is_not_real_counts_as_not_read(self):
+        cleaned = scanning.clean({"purchaseDate": "06-10-2026", "purchaseTime": "25:99"})
+        self.assertEqual((cleaned["purchaseDate"], cleaned["purchaseTime"]), ("", ""))
+        cleaned = scanning.clean({"purchaseDate": "2026-13-01", "purchaseTime": "9:05"})
+        self.assertEqual((cleaned["purchaseDate"], cleaned["purchaseTime"]), ("", "09:05"))
+        cleaned = scanning.clean({"purchaseDate": " 2026-10-06 ", "purchaseTime": "09:05"})
+        self.assertEqual((cleaned["purchaseDate"], cleaned["purchaseTime"]), ("2026-10-06", "09:05"))
+
     def test_emoji_only_keeps_real_emoji(self):
         self.assertEqual(scanning.clean_emoji("🥛"), "🥛")
         self.assertEqual(scanning.clean_emoji("milk"), "")

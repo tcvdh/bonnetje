@@ -36,7 +36,7 @@ Open `http://<server-ip>:3000/`: the page says the server is running. In the app
 
 ## Settings
 
-Create an `.env` file (one `NAME=value` per line, quote values with spaces):
+Create an `.env` file (one `NAME=value` per line, quote values with spaces, comments only on their own line):
 
 ```
 RECEIPT_APP_KEY=your-password
@@ -76,9 +76,10 @@ Give the printed key to that household; they enter your server address and that 
 
 Add `RECEIPT_ADMIN_PORT=3001` and `RECEIPT_ADMIN_KEY=<a password only you know>` to `.env` and publish the port
 (the included `compose.yml` does: `3001:3001`; with `docker run` use `-p 3001:3001`). Then open
-`http://<server-ip>:3001` from any machine on your local network. The dashboard only answers requests from private/LAN
-addresses (localhost, private IPs, `.local` mDNS) and needs the admin key on every call, so it is not reachable from
-the public internet. Everything the dashboard can do is described in [README.md](README.md#admin-dashboard).
+`http://<server-ip>:3001` from any machine on your local network. It needs the admin key on every call, but it does
+not check where requests come from: **keep the port on your LAN and never forward it to the internet** (a reverse proxy
+in front must also be LAN-only, see [README.md](README.md#admin-dashboard)). Everything the dashboard can do is described
+there too.
 
 ## Running it for other people
 

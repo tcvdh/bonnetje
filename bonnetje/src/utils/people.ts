@@ -4,7 +4,7 @@ import { pendingReceiptIds } from "./invoice";
 
 export const MAX_NAME_LENGTH = 20;
 
-/** The saved list, or the original four for data that predates custom people. */
+/** The saved list, or just yourself (Ik) when there is none yet. */
 export function withPeople(people: string[] | undefined): string[] {
   return people && people.length ? people : DEFAULT_PEOPLE;
 }

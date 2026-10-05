@@ -6,7 +6,13 @@ cd "$(dirname "$0")"
 
 if [ ! -f .env ]; then
   key=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
-  (umask 077; printf 'RECEIPT_APP_KEY=%s\nRECEIPT_PORT=3000\n# RECEIPT_GEMINI_KEY=   # add your Gemini key here to enable receipt scanning\n# RECEIPT_IBAN=       # your IBAN, for the payment QR code\n# RECEIPT_NAME=       # the name on that account\n# RECEIPT_BUNQ=       # optional bunq.me handle, for a shareable payment link\n# RECEIPT_USE_AH_API=true   # Albert Heijn integration (self-hosting only, see README)\n# RECEIPT_ADMIN_PORT=3001   # local admin dashboard, together with RECEIPT_ADMIN_KEY=...\n' "$key" > .env)
+  # Comments on their own line: `docker run --env-file` would read one after a value as part of the value.
+  (umask 077; printf '%s\n' "RECEIPT_APP_KEY=$key" 'RECEIPT_PORT=3000' \
+    '# Your Gemini key, to turn on receipt scanning:' '# RECEIPT_GEMINI_KEY=' \
+    '# Your IBAN and the name on that account, for the payment QR code:' '# RECEIPT_IBAN=' '# RECEIPT_NAME=' \
+    '# Optional bunq.me handle, for a shareable payment link:' '# RECEIPT_BUNQ=' \
+    '# Albert Heijn integration (self-hosting only, see README):' '# RECEIPT_USE_AH_API=true' \
+    '# Admin dashboard, together with its own key:' '# RECEIPT_ADMIN_PORT=3001' '# RECEIPT_ADMIN_KEY=' > .env)
   echo "Created .env with a new app key."
 fi
 
@@ -20,7 +26,7 @@ ip=$(python3 -c 'import socket; s=socket.socket(socket.AF_INET, socket.SOCK_DGRA
 echo
 echo "  Server:  http://${ip}:${RECEIPT_PORT:-3000}   (server page; AH login there when RECEIPT_USE_AH_API=true)"
 echo "  Key:     ${RECEIPT_APP_KEY:-(none: households only)}"
-[ -n "${RECEIPT_ADMIN_PORT:-}" ] && [ -n "${RECEIPT_ADMIN_KEY:-}" ] && echo "  Admin:   http://localhost:${RECEIPT_ADMIN_PORT}   (LAN only)"
+[ -n "${RECEIPT_ADMIN_PORT:-}" ] && [ -n "${RECEIPT_ADMIN_KEY:-}" ] && echo "  Admin:   http://${ip}:${RECEIPT_ADMIN_PORT}   (keep it on your LAN)"
 echo
 
 exec python3 server.py

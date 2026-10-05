@@ -1,9 +1,10 @@
 """The admin dashboard: a second, separate HTTP server for the person who runs this one.
 
 * Off unless RECEIPT_ADMIN_PORT and RECEIPT_ADMIN_KEY are both set.
-* Listens on 0.0.0.0 inside Docker; the compose file publishes the port to the LAN.
-* Needs the admin key on every API call (a header, never a cookie), only answers to private/LAN host names
-  (localhost, private IPs, .local mDNS — blocks DNS rebinding from the public internet), and sends no CORS headers.
+* Listens on RECEIPT_ADMIN_HOST (default 0.0.0.0). Who can reach it is decided where you publish the port: keep it
+  on your LAN (or behind a LAN-only reverse proxy) and never forward it to the internet.
+* Needs the admin key on every API call (a header, never a cookie; a web page from elsewhere cannot read it), wrong
+  keys are throttled, and it sends no CORS headers.
 
 It creates and changes households through the same registry the `tenant` command uses. It never shows a household's
 key (only hashes are stored): a key is shown once, when it is made or replaced.
@@ -19,23 +20,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from limiter import Limiter
-from tenants import DEFAULT_ID, ID_RE, clean_bunq
+from tenants import DEFAULT_ID, ID_RE, clean_bunq, clean_payee_name
 
 log = logging.getLogger("receipt.admin")
 
 PAGE = Path(__file__).parent / "admin" / "dashboard.html"
 CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'"
-LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
-import ipaddress as _ip
-
-def _is_private_host(host: str) -> bool:
-    """Allow localhost names and private/LAN IP addresses in the Host header."""
-    if host in LOCAL_HOSTS:
-        return True
-    try:
-        return _ip.ip_address(host.strip("[]")).is_private
-    except ValueError:
-        return host.endswith(".local")  # mDNS names
 MAX_BODY = 64 * 1024
 LIMIT_FIELDS = {"week": "scan_limit", "requests": "request_limit", "rate": "scan_rate"}
 SETTING_MAX = {"requests_per_minute": 1_000_000, "scans_per_minute": 1_000_000, "scans_per_week": 1_000_000, "photo_days": 3650}
@@ -159,7 +149,7 @@ class Api:
         if not isinstance(payee, dict):
             raise BadInput("Dit IBAN of deze naam is niet geldig.")
         iban = re.sub(r"\s+", "", str(payee.get("iban", ""))).upper()
-        name = str(payee.get("name", "")).strip()[:70]
+        name = clean_payee_name(payee.get("name", ""))
         if (iban or name) and (not self.ctx.iban_valid(iban) or not name):  # IBAN and name go together
             raise BadInput("Dit IBAN of deze naam is niet geldig.")
         try:
@@ -234,11 +224,6 @@ def make_handler(key: str, api: Api):
                 raise BadInput("Verwacht een JSON-object.")
             return data
 
-        def _allowed(self) -> bool:
-            host = self.headers.get("Host", "").lower()
-            host = host.rsplit(":", 1)[0] if not host.endswith("]") else host  # strip the port, keep [::1]
-            return _is_private_host(host)
-
         do_GET = lambda self: self._dispatch("GET")
         do_POST = lambda self: self._dispatch("POST")
         do_PUT = lambda self: self._dispatch("PUT")
@@ -248,8 +233,6 @@ def make_handler(key: str, api: Api):
             path = self.path.split("?", 1)[0]
             ip = self.client_address[0]
             try:
-                if not self._allowed():
-                    return self._json({"error": "forbidden_host"}, 403)
                 if method == "GET" and path == "/":
                     return self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
                 if not path.startswith("/api/"):

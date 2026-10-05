@@ -17,11 +17,13 @@ export function matchDiscounts(
   discounts.forEach((disc, di) => {
     if (disc.general) return; // stays unmatched so the user can link it
     const dName = normalize(disc.name);
+    if (!dName) return; // no letters ("25%"): nothing to match on, so the user links it
     let bestMatch = -1;
     let bestScore = 0;
 
     products.forEach((p, pi) => {
       const pName = normalize(p.name);
+      if (!pName) return; // "" is part of every name, so it would always look like a match
       const pWords = p.name
         .toLowerCase()
         .split(/\s+/)

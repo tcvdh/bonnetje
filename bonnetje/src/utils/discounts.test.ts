@@ -67,6 +67,13 @@ describe("matchDiscounts", () => {
     expect(unmatched).toHaveLength(1);
   });
 
+  it("never matches on a name without letters", () => {
+    const pct = { name: "25%", amount: { amount: -1 } };
+    expect(matchDiscounts([product("Melk", 1), product("Brood", 2)], [pct]).unmatched).toEqual([pct]);
+    const bonus = { name: "Bonus melk", amount: { amount: -1 } };
+    expect(matchDiscounts([product("100", 1), product("Melk", 2)], [bonus]).productDiscounts).toEqual({ 1: -1 });
+  });
+
   it("returns nothing for an empty list", () => {
     expect(matchDiscounts([product("a", 1)], [])).toEqual({ productDiscounts: {}, unmatched: [] });
   });

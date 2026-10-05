@@ -310,9 +310,11 @@ class Households:
             c.execute("CREATE TABLE IF NOT EXISTS seen (tenant_id TEXT PRIMARY KEY, at REAL NOT NULL)")
             c.execute(
                 "CREATE TABLE IF NOT EXISTS usage ("
-                " tenant_id TEXT NOT NULL, month TEXT NOT NULL, scans INTEGER NOT NULL,"
-                " PRIMARY KEY (tenant_id, month))"
+                " tenant_id TEXT NOT NULL, week TEXT NOT NULL, scans INTEGER NOT NULL,"
+                " PRIMARY KEY (tenant_id, week))"
             )
+            if "month" in {r["name"] for r in c.execute("PRAGMA table_info(usage)")}:  # older servers named it wrongly
+                c.execute("ALTER TABLE usage RENAME COLUMN month TO week")
         os.chmod(self.registry_path, 0o600)
         for tenant in self.all():
             tenant.init()
@@ -416,7 +418,7 @@ class Households:
 
     def scans_this_week(self, tid: str) -> int:
         with self._reg() as c:
-            row = c.execute("SELECT scans FROM usage WHERE tenant_id = ? AND month = ?", (tid, self._week())).fetchone()
+            row = c.execute("SELECT scans FROM usage WHERE tenant_id = ? AND week = ?", (tid, self._week())).fetchone()
         return row["scans"] if row else 0
 
     def scans_total(self, tid: str) -> int:
@@ -460,27 +462,39 @@ class Households:
                     )
         self._settings_cache = (0.0, {})
 
-    def try_count_scan(self, tenant: Tenant, default_limit: int) -> bool:
-        """Counts one Gemini call for this household this week; False when its weekly limit is used up.
-        The default household is never limited. 0 means unlimited."""
+    def scans_left(self, tenant: Tenant, default_limit: int) -> bool:
+        """False when this household used up its weekly scan limit. The default household is never limited.
+        0 means unlimited."""
+        # ponytail: checked before the scan and counted after it, so scans running at the same moment
+        # (at most MAX_SCANS_AT_ONCE) can go a few over the limit
         limit = 0 if tenant.id == DEFAULT_ID else (tenant.scan_limit if tenant.scan_limit is not None else default_limit)
+        return not limit or self.scans_this_week(tenant.id) < limit
+
+    def count_scan(self, tenant: Tenant) -> None:
+        """Counts one scan that was read, for this household this week."""
         with self._reg() as c:
-            c.execute("BEGIN IMMEDIATE")
-            row = c.execute("SELECT scans FROM usage WHERE tenant_id = ? AND month = ?", (tenant.id, self._week())).fetchone()
-            used = row["scans"] if row else 0
-            if limit and used >= limit:
-                return False
             c.execute(
-                "INSERT INTO usage (tenant_id, month, scans) VALUES (?, ?, 1) "
-                "ON CONFLICT(tenant_id, month) DO UPDATE SET scans = scans + 1",
+                "INSERT INTO usage (tenant_id, week, scans) VALUES (?, ?, 1) "
+                "ON CONFLICT(tenant_id, week) DO UPDATE SET scans = scans + 1",
                 (tenant.id, self._week()),
             )
-            return True
 
 
 # ── the `tenant` command ─────────────────────────────────────────────────
 
 LIMIT_COLUMNS = {"week": "scan_limit", "requests": "request_limit", "rate": "scan_rate"}
+
+def clean_payee_name(raw) -> str:
+    """The account name for the EPC QR code: one line (a newline would break the code), at most 70 characters."""
+    return re.sub(r"[\x00-\x1f\x7f]", " ", str(raw or "")).strip()[:70]
+
+
+def whole_number(raw: str) -> int:
+    """A limit typed on the command line: a whole number from 0 up."""
+    if not raw.isdigit():
+        raise ValueError(f"{raw!r} is not a whole number of 0 or more")
+    return int(raw)
+
 
 def clean_bunq(raw) -> str:
     """A bunq.me handle ("tcvdh", "@tcvdh" or "bunq.me/tcvdh" all work); "" when empty. Raises ValueError if invalid."""
@@ -498,10 +512,12 @@ USAGE = """Households (each has its own key and its own private data):
   python3 server.py tenant limit ID week|requests|rate N|default
                                                     scans per week / requests per minute / scans per minute
                                                     (0 = unlimited, default = the server-wide value)
-  python3 server.py tenant ah ID on|off|default     Albert Heijn integration for this household
-  python3 server.py tenant payee ID [IBAN "Name"] [--bunq HANDLE]
+  python3 server.py tenant ah ID on|off|default     Albert Heijn for this household (only does something when
+                                                    RECEIPT_USE_AH_API=true; off then switches it off for them)
+  python3 server.py tenant payee ID [IBAN "Name"] [--bunq HANDLE] [--clear]
                                                     where this household's housemates pay: IBAN + name (QR code),
-                                                    a bunq.me handle (share link), or both
+                                                    a bunq.me handle (share link), or both. What you leave out stays
+                                                    as it was; --bunq "" removes the handle, --clear removes all
   python3 server.py tenant delete ID --yes          delete the household and ALL its data
 With Docker:  docker exec -u bonnetje bonnetje python3 server.py tenant ...
 """
@@ -515,8 +531,8 @@ def cli(hh: Households, args: list[str], iban_valid) -> int:
     cmd = args[0] if args else ""
     try:
         hh.init()
-        if cmd == "add" and len(args) >= 2:
-            limit = int(args[args.index("--scans") + 1]) if "--scans" in args else None
+        if cmd == "add" and len(args) in (2, 4) and (len(args) == 2 or args[2] == "--scans"):
+            limit = whole_number(args[3]) if len(args) == 4 else None
             tenant, key = hh.add(args[1], limit)
             print(f"Household created: {tenant.name}\n  id:  {tenant.id}\n  key: {key}\n"
                   "The key is shown only once; give it to the household (it goes into the app).")
@@ -534,9 +550,7 @@ def cli(hh: Households, args: list[str], iban_valid) -> int:
             hh.update(args[1], disabled=1 if cmd == "revoke" else 0)
             print("Done.")
         elif cmd == "limit" and len(args) == 4 and args[2] in LIMIT_COLUMNS:
-            value = None if args[3] == "default" else int(args[3])
-            if value is not None and value < 0:
-                raise ValueError("a limit cannot be negative")
+            value = None if args[3] == "default" else whole_number(args[3])
             hh.update(args[1], **{LIMIT_COLUMNS[args[2]]: value})
             print("Done.")
         elif cmd == "ah" and len(args) == 3 and args[2] in ("on", "off", "default"):
@@ -545,7 +559,9 @@ def cli(hh: Households, args: list[str], iban_valid) -> int:
             print("Done.")
         elif cmd == "payee" and len(args) >= 2:
             rest = args[2:]
-            bunq = ""
+            clear = "--clear" in rest
+            rest = [a for a in rest if a != "--clear"]
+            bunq = None  # None = leave the handle as it is
             if "--bunq" in rest:
                 i = rest.index("--bunq")
                 try:
@@ -554,19 +570,22 @@ def cli(hh: Households, args: list[str], iban_valid) -> int:
                     print("That bunq handle is not valid.", file=sys.stderr)
                     return 1
                 rest = rest[:i] + rest[i + 2:]
-            if len(rest) not in (0, 2) or not (rest or bunq):
+            if len(rest) not in (0, 2) or not (rest or bunq is not None or clear):
                 print(USAGE)
                 return 1
-            payee = {}
+            tenant = hh.tenant(args[1])
+            payee = {} if clear else dict(tenant.get_setting("payee") or {})
             if rest:
-                iban = re.sub(r"\s+", "", rest[0]).upper()
-                if not iban_valid(iban):
-                    print("That IBAN is not valid.", file=sys.stderr)
+                iban, name = re.sub(r"\s+", "", rest[0]).upper(), clean_payee_name(rest[1])
+                if not iban_valid(iban) or not name:
+                    print("That IBAN or name is not valid.", file=sys.stderr)
                     return 1
-                payee = {"iban": iban, "name": rest[1].strip()[:70]}
-            if bunq:
+                payee.update(iban=iban, name=name)
+            if bunq is not None:
                 payee["bunq"] = bunq
-            hh.tenant(args[1]).set_setting("payee", payee)
+            if not payee.get("bunq"):
+                payee.pop("bunq", None)
+            tenant.set_setting("payee", payee or None)
             print("Done.")
         elif cmd == "delete" and len(args) == 3 and args[2] == "--yes":
             hh.delete(args[1])

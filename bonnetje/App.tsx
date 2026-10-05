@@ -7,7 +7,17 @@ import { colors } from "./src/theme";
 import { AppContext, DataUpdate, emptyData } from "./src/context";
 import { AppData, Receipt } from "./src/types";
 import { RootStackParamList } from "./src/navigation";
-import { flushPending, forgetServer, getAuthStatus, loadData, loadServerConfig, saveData, setConflictHandler } from "./src/api";
+import {
+  describeError,
+  flushPending,
+  forgetServer,
+  getAuthStatus,
+  loadData,
+  loadServerConfig,
+  saveData,
+  setConflictHandler,
+  setSaveRejectedHandler,
+} from "./src/api";
 import SetupScreen from "./src/screens/SetupScreen";
 import ReceiptListScreen from "./src/screens/ReceiptListScreen";
 import ReceiptDetailScreen from "./src/screens/ReceiptDetailScreen";
@@ -57,7 +67,16 @@ export default function App() {
       applyData(remote);
       Alert.alert(LOST_CHANGE.title, LOST_CHANGE.message);
     });
-    return () => setConflictHandler(null);
+    setSaveRejectedHandler((e) =>
+      Alert.alert(
+        "Nog niet opgeslagen op de server",
+        `${describeError(e)}\n\nJe wijziging staat nog op deze telefoon en wordt opnieuw verstuurd zodra de app weer opent.`
+      )
+    );
+    return () => {
+      setConflictHandler(null);
+      setSaveRejectedHandler(null);
+    };
   }, [applyData]);
 
   // A save that failed while offline is tried again when the app comes back.

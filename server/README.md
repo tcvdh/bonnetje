@@ -26,7 +26,7 @@ your `RECEIPT_APP_KEY`.
 
 ### Settings
 
-All settings are environment variables (passed via `--env-file` with Docker, or `.env` with `run.sh` for local dev). One `NAME=value` per line; quote values that contain spaces (`RECEIPT_NAME="Jan Jansen"`). [`.env.example`](.env.example) lists every setting with comments: `cp .env.example .env` and fill it in.
+All settings are environment variables (passed via `--env-file` with Docker, or `.env` with `run.sh` for local dev). One `NAME=value` per line; quote values that contain spaces (`RECEIPT_NAME="Jan Jansen"`) and put comments on their own line (`docker run --env-file` reads a comment after a value as part of the value). The server refuses to start when a limit is not a whole number. [`.env.example`](.env.example) lists every setting with comments: `cp .env.example .env` and fill it in.
 
 | Variable | Needed | What it does |
 |---|---|---|
@@ -40,9 +40,9 @@ All settings are environment variables (passed via `--env-file` with Docker, or 
 | `RECEIPT_DATA_DIR` | no | Default `./state`. The Docker image fixes it to `/data`. |
 | `RECEIPT_REQUESTS_PER_MINUTE` | no | Default `120`. Requests per minute per household (`0` = unlimited). Opening the app takes about 3 requests plus one per open receipt, so a busy household bursts to roughly 30. |
 | `RECEIPT_SCANS_PER_MINUTE` | no | Default `5`. Gemini scans per minute per household (`0` = unlimited). |
-| `RECEIPT_SCANS_PER_WEEK` | no | Default `25`. Gemini scans per week for each household made with `tenant add` (`0` = unlimited). The built-in household is never limited. |
+| `RECEIPT_SCANS_PER_WEEK` | no | Default `25`. Gemini scans per week for each household made with `tenant add` (`0` = unlimited). Only scans that were read count, not failed ones. The built-in household is never limited. |
 | `RECEIPT_PHOTO_DAYS` | no | Default `0` (keep). Delete the photo of a kept receipt after this many days (the receipt itself stays; a rescan is then no longer possible). |
-| `RECEIPT_ADMIN_PORT`, `RECEIPT_ADMIN_KEY` | no | Both set = the [admin dashboard](#admin-dashboard) runs on that port, protected by that key. `RECEIPT_ADMIN_HOST` (default `127.0.0.1`; the Docker image sets `0.0.0.0`) is where it listens. Only private/LAN addresses are answered either way. |
+| `RECEIPT_ADMIN_PORT`, `RECEIPT_ADMIN_KEY` | no | Both set = the [admin dashboard](#admin-dashboard) runs on that port, protected by that key. `RECEIPT_ADMIN_HOST` (default `0.0.0.0`) is where it listens. Keep the port on your LAN; never forward it to the internet. |
 | `RECEIPT_TRUSTED_PROXY` | no | Address(es) of your reverse proxy, comma-separated (for Docker usually the proxy container or the Docker gateway). Only requests from these are allowed to say who the real client is (`X-Forwarded-For`), so the rate limits work per person instead of per proxy. |
 | `RECEIPT_CORS_ORIGIN` | no | Default `*`. Set it empty to send no CORS headers at all: the phone apps don't need them, only the browser version of the app does. Empty is right for a public server. |
 | `RECEIPT_GEMINI_MODEL`, `RECEIPT_SCAN_PROMPT`, `RECEIPT_AH_API` | no | Model name, prompt file and AH API base (for tests). |
@@ -79,8 +79,9 @@ is stored on the server.
 | `list` | all households, their state and this week's scans |
 | `rotate ID` | new key; the old one stops working at once |
 | `revoke ID` / `enable ID` | switch a household off / on again (its data stays) |
+| `ah ID on\|off\|default` | Albert Heijn for that household. Only has an effect with `RECEIPT_USE_AH_API=true` (`.env` leads): then `off` switches it off for them |
 | `limit ID week\|requests\|rate N` | that household's own limit: scans per week / requests per minute / scans per minute (`0` = unlimited); `N` = `default` goes back to the server-wide value |
-| `payee ID [IBAN "Name"] [--bunq HANDLE]` | where that household's housemates pay: IBAN + name (payment QR code), a bunq.me handle (share link), or both. Each part is chosen separately; the built-in household falls back to `RECEIPT_IBAN` + `RECEIPT_NAME` / `RECEIPT_BUNQ` for what it has not set itself |
+| `payee ID [IBAN "Name"] [--bunq HANDLE] [--clear]` | where that household's housemates pay: IBAN + name (payment QR code), a bunq.me handle (share link), or both. What you leave out stays as it was; `--bunq ""` removes the handle, `--clear` removes everything. The built-in household falls back to `RECEIPT_IBAN` + `RECEIPT_NAME` / `RECEIPT_BUNQ` for what it has not set itself |
 | `delete ID --yes` | delete the household and **all** its data, photos included |
 
 Good to know:
@@ -118,7 +119,7 @@ What protects the server, and the settings that tune it:
 | Keys | Compared in constant time. Households made with `tenant add` get 256-bit random keys, stored only as a SHA-256 hash; a lost phone: `tenant rotate`. Wrong keys: 10 a minute per client address, then `429`. |
 | Isolation | One database and photo folder per household (see above). Data files are private to the server user (`0600` / `0700`). |
 | Limits | Per household (defaults, all adjustable): 120 requests and 5 scans a minute, 25 scans per week. Request bodies at most 2 MB (photos 25 MB), at most 128 connections at once, 60 s socket timeout. |
-| Admin dashboard | A separate port, only reachable from your local network (private IPs, localhost, `.local`), with its own key (see below). Off unless you turn it on. |
+| Admin dashboard | A separate port with its own key (see below), meant for your local network only. Off unless you turn it on. |
 | Real client address | With a reverse proxy, set `RECEIPT_TRUSTED_PROXY` to the proxy's address; otherwise every visitor looks like the proxy. |
 | Web | No cookies (token in a header), so no CSRF. `RECEIPT_CORS_ORIGIN=` (empty) for a public server. Every response is `no-store` and `nosniff`; the server page has a strict CSP. |
 | Photos | Only image types are accepted, files are named by the server (`<id>.jpg`), and read back only through the household's own record. `RECEIPT_PHOTO_DAYS` deletes old ones. |
@@ -136,8 +137,10 @@ on with two settings:
 
 ```
 RECEIPT_ADMIN_PORT=3001
-RECEIPT_ADMIN_KEY=a-password-only-you-know     # not the same as RECEIPT_APP_KEY
+RECEIPT_ADMIN_KEY=a-password-only-you-know
 ```
+
+Use a different key from `RECEIPT_APP_KEY`.
 
 Then open `http://<server-ip>:3001` from any machine on your local network and log in with the admin key. What it shows and does:
 
@@ -145,16 +148,28 @@ Then open `http://<server-ip>:3001` from any machine on your local network and l
   on. The four server-wide limits are editable here (a value set here wins over `.env`; *Herstel* goes back to `.env` / the default).
 - **Huishoudens:** per household: last seen, people, scanned and split receipts, invoices, scans this week against its limit, storage, AH status.
   Actions: edit (name, its own limits, AH on/off, payment account), new key, switch off / on, delete (type its name to confirm).
-  The AH toggle only appears when AH is enabled globally (`RECEIPT_USE_AH_API=true`); each household can be switched off individually.
+  The AH toggle only appears when AH is enabled globally (`RECEIPT_USE_AH_API=true`): `.env` leads, so with it off no household has AH,
+  and with it on each household can be switched off individually.
   A new or replaced key is shown once: only hashes are stored, so a key can never be looked up later.
 
 How it is kept private:
 
 - It runs on a different port from the app's server and is never part of the app's API.
-- Every call needs the admin key (in a header, not a cookie), and only requests from private/LAN addresses are answered
-  (localhost, private IPs, `.local` mDNS), so the public internet cannot reach it even if the port is open. A web page
-  outside your network cannot call it (DNS rebinding blocked by the host-header check), and without CORS headers,
-  cannot call it cross-origin either. Wrong keys: 10 a minute, then blocked.
+- Every call needs the admin key (in a header, not a cookie, so a web page elsewhere cannot use your login), and it
+  sends no CORS headers. Wrong keys: 10 a minute, then blocked.
+- It does **not** check where a request comes from: who can reach it is decided by where you open its port. Keep it on
+  your LAN and never forward it to the internet. Behind a reverse proxy, let the proxy allow LAN addresses only, for
+  example with Caddy:
+
+  ```
+  admin.example.com {
+      @lan remote_ip private_ranges
+      handle @lan {
+          reverse_proxy <server-ip>:3001
+      }
+      respond 403
+  }
+  ```
 - Docker: the image listens on all interfaces *inside* the container, and `compose.yml` publishes it as `3001:3001`
   (LAN-accessible). Access it from any machine on your local network.
 - Everything it changes is written to the log (`admin: household ... changed`), never a key.

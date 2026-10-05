@@ -60,7 +60,7 @@
 <main>
   <section id="login" class="panel" hidden>
     <h1>Bonnetje beheer</h1>
-    <p class="sub" style="display:block">Alleen bereikbaar vanaf deze computer. Vul de beheersleutel in (<code>RECEIPT_ADMIN_KEY</code>).</p>
+    <p class="sub" style="display:block">Alleen bedoeld voor je eigen netwerk. Vul de beheersleutel in (<code>RECEIPT_ADMIN_KEY</code>).</p>
     <label for="adminKey">Beheersleutel</label>
     <input id="adminKey" type="password" autocomplete="off">
     <p class="err" id="loginErr" role="alert"></p>
@@ -82,7 +82,7 @@
       <div class="grid" id="cards"></div>
       <h2>Limieten voor de hele server</h2>
       <div class="panel">
-        <p class="sub" style="display:block;margin-top:0">Geldt voor elk huishouden dat geen eigen limiet heeft. Een waarde die je hier instelt wint van het .env-bestand. 0 = onbeperkt.</p>
+        <p class="sub" style="display:block;margin-top:0">Geldt voor elk huishouden dat geen eigen limiet heeft. Een waarde die je hier instelt wint van het .env-bestand. 0 = onbeperkt, leeg = terug naar .env / standaard.</p>
         <div class="row" id="settings"></div>
         <p class="err" id="settingsErr" role="alert"></p>
         <button id="saveSettings">Opslaan</button>
@@ -167,7 +167,7 @@ function render() {
   const NAMES = { requests_per_minute: "Verzoeken per minuut", scans_per_minute: "Scans per minuut", scans_per_week: "Scans per week", photo_days: "Foto's bewaren (dagen)" };
   $("#settings").replaceChildren(...Object.entries(o.settings).map(([name, v]) => h("div", {},
     h("label", { for: "set-" + name }, NAMES[name], " ", h("span", { class: "badge" }, SOURCE[v.source])),
-    h("input", { id: "set-" + name, type: "number", min: "0", value: v.value, "data-name": name }),
+    h("input", { id: "set-" + name, type: "number", min: "0", value: v.value, placeholder: "leeg = .env / standaard", "data-name": name }),
     v.source === "dashboard" ? h("button", { class: "ghost small", style: "margin-top:6px", onclick: async () => { try { await api("PUT", "/api/settings", { [name]: null }); await load(); } catch (e) { $("#settingsErr").textContent = e.message; } } }, "Herstel naar .env / standaard") : null,
   )));
   $("#info").replaceChildren(...[
@@ -192,7 +192,7 @@ function row(x) {
     h("td", {}, `${x.scansWeek} / ${x.limits.week.effective === 0 ? "∞" : x.limits.week.effective}`, h("small", {}, `${x.scansTotal} totaal`)),
     h("td", {}, `${limitText(x.limits.requests)} verzoeken`, h("small", {}, `${limitText(x.limits.rate)} scans`)),
     h("td", {}, st ? fmtBytes(st.bytes) : "?", st ? h("small", {}, `${st.photos} foto's`) : null),
-    h("td", {}, (() => { const on = x.ahEnabled === null ? state.overview.server.ahEnabled : x.ahEnabled; if (!on) return h("span", { class: "badge" }, "uit"); return st && st.ahLoggedIn ? h("span", { class: "badge good" }, "ingelogd") : h("span", { class: "badge warn" }, "aan"); })()),
+    h("td", {}, (() => { const on = state.overview.server.ahEnabled && x.ahEnabled !== false; if (!on) return h("span", { class: "badge" }, "uit"); return st && st.ahLoggedIn ? h("span", { class: "badge good" }, "ingelogd") : h("span", { class: "badge warn" }, "aan"); })()),
     h("td", { class: "wrap" }, h("div", { class: "actions" },
       btn("Bewerken", "ghost", () => editDialog(x)),
       btn("Nieuwe sleutel", "ghost", () => rotate(x), x.builtin),
@@ -312,7 +312,9 @@ $("#saveSettings").onclick = async () => {
     const body = {};
     for (const input of document.querySelectorAll("#settings input")) {
       const cur = state.overview.settings[input.dataset.name];
-      if (Number(input.value) !== cur.value) body[input.dataset.name] = Number(input.value);
+      const v = input.value.trim();
+      if (v === "") { if (cur.source === "dashboard") body[input.dataset.name] = null; } // empty = back to .env / standaard, never 0
+      else if (Number(v) !== cur.value) body[input.dataset.name] = Number(v);
     }
     if (Object.keys(body).length) await api("PUT", "/api/settings", body);
     await load();

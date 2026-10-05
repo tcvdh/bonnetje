@@ -177,6 +177,13 @@ describe("voiding", () => {
     expect(activeTotal(out)).toBe(3);
   });
 
+  it("adds the total up in whole cents, without float noise", () => {
+    const parts = invoice("2026-002", {
+      receipts: [0.1, 0.2, 0.7].map((subtotal, i) => ({ receiptId: `r${i}`, store: "AH", dateTime: "", lines: [], subtotal })),
+    });
+    expect(activeTotal(parts)).toBe(1);
+  });
+
   it("voids the whole invoice when every receipt is withdrawn", () => {
     const once = voidReceiptOnInvoices([inv], "Alice", "a", "t1");
     const [twice] = voidReceiptOnInvoices(once, "Alice", "b", "t2");

@@ -17,12 +17,20 @@ export function useMarkAllPaid(onInvoice: (invoice: Invoice) => void) {
 
     const details = await getReceiptDetails(ids); // a failed one falls back to "Product n" instead of blocking the payment
 
-    const invoice = buildInvoice({ person, receiptIds: ids, data, receipts, details, now: new Date(), scope: "all" });
-    const paid = { ...data.paid };
-    ids.forEach((id) => {
-      paid[id] = { ...(paid[id] || {}), [person]: true };
+    // Built from the newest data: other changes may have been saved while the details loaded. Only the receipts
+    // that were owed when you tapped (what the QR code showed) and still are get paid.
+    const made: { invoice?: Invoice } = {};
+    persistData((current) => {
+      const stillOpen = new Set(pendingReceiptIds(person, current));
+      const receiptIds = ids.filter((id) => stillOpen.has(id));
+      if (!receiptIds.length) return current;
+      made.invoice = buildInvoice({ person, receiptIds, data: current, receipts, details, now: new Date(), scope: "all" });
+      const paid = { ...current.paid };
+      receiptIds.forEach((id) => {
+        paid[id] = { ...(paid[id] || {}), [person]: true };
+      });
+      return { ...current, paid, invoices: [made.invoice, ...current.invoices], reservations: withoutReservation(current, person) };
     });
-    persistData({ ...data, paid, invoices: [invoice, ...data.invoices], reservations: withoutReservation(data, person) });
-    onInvoice(invoice);
+    if (made.invoice) onInvoice(made.invoice);
   };
 }

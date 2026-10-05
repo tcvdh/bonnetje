@@ -35,7 +35,7 @@ Bonnetje Splitter: split supermarket receipts between housemates. The app is a t
 - `src/context.ts` is the app state: `data`, `persistData`, and the fetched `receipts` (`useReceiptFeed` on the list screen fills them). `persistData` takes new data or an updater `(current) => next`; use the updater after any `await`. Also `src/types.ts`, `src/constants.ts`, `src/theme.ts`.
 - `src/hooks/`: `useReceiptFeed` (fetch + re-settle), `useReceiptDetail` (load one receipt, resolve discounts), `useReceiptActions` (every change to one receipt), `useMarkAllPaid`, `useFinishReceipt`, `useSelection` (multi-select), `useDiscountLinker`.
 - `src/components/`: bottom sheets (`*Sheet.tsx`), list items and chips, `SplitPicker` (people and parts for a split, used by `PersonPicker` and `BatchBar`), and the parts of the two big screens (`ListHeader`, `ListActions`, `ReceiptHeader`, `DiscountSections`, `ReceiptActions`). Every bottom sheet is a `BottomSheet` and every centred dialog a `CardDialog` from `Sheet.tsx`; do not build a new `Modal` with its own overlay and handle. A dialog that opens from inside a sheet goes in that sheet's children, so it stacks on top.
-- `src/utils/`: pure logic (`settle`, `balance`, `invoice`, `discounts`, `people`, `normalize`, `money`, `image`, `receipts`, `bunq`, `serverUrl`, `sets`). Keep it free of React.
+- `src/utils/`: pure logic (`settle`, `balance`, `invoice`, `discounts`, `people`, `normalize`, `money`, `image`, `receipts`, `bunq`, `serverUrl`, `sets`, `version`). Keep it free of React.
 - The app knows nothing about households: the key it holds selects one on the server, and everything it sees (data, receipts, payee) is that household's. Server errors it shows in Dutch are mapped in `describeError`; scan errors carry their own Dutch `message` from the server.
 - `src/api.ts` also holds the payee (IBAN + name for the QR code). It comes from the server in `/api/auth/status` and is cached; if it is missing, `PaymentSheet` shows a warning instead of a QR code. With an optional `bunq` handle, `PaymentSheet` also offers a shared message with the unpaid invoice (`paymentRequestText`, never says "betaald") and a `bunq.me` link (`utils/bunq.ts`). Never hardcode account details.
 - The Albert Heijn warning comes from the server: `/api/receipts` returns `ahError` only when the server runs with `RECEIPT_USE_AH_API=true` and is not logged in. Do not add AH-specific UI that assumes AH is on.
@@ -54,7 +54,7 @@ Bonnetje Splitter: split supermarket receipts between housemates. The app is a t
 
 ## Building
 
-Release builds (unsigned iOS IPA + Android APK) run in GitHub Actions (`../.github/workflows/build.yml`, manual "Run workflow": per platform skip / github-hosted / self-hosted, optional version input saved to `app.json`). The workflow runs `expo prebuild` for Android. EAS (`eas.json`) is configured but not what the release flow uses. Docs if needed: https://docs.expo.dev/eas/index.md
+Release builds (unsigned iOS IPA + Android APK) run in GitHub Actions (`../.github/workflows/build.yml`, manual "Run workflow": per platform skip / github-hosted / self-hosted, optional version input saved to `app.json`). The workflow runs `expo prebuild` for each platform it builds; the version is X.Y.Z (`set-version.js` refuses anything else). EAS (`eas.json`) is configured but not what the release flow uses. Docs if needed: https://docs.expo.dev/eas/index.md
 
 ## Rules
 

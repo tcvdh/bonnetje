@@ -17,15 +17,16 @@ The server holds your receipts, receipt photos and (with `RECEIPT_USE_AH_API=tru
 - **Several households on one server** are kept apart by giving each its own database and photo folder, and by
   limits per household (requests, scans, body size). See "Security" in [server/README.md](server/README.md#security)
   for everything the server does, and the settings to use when other people are on your server
-  (`RECEIPT_TRUSTED_PROXY`, `RECEIPT_CORS_ORIGIN=`, `RECEIPT_SCANS_PER_MONTH`, `RECEIPT_PHOTO_DAYS`).
+  (`RECEIPT_TRUSTED_PROXY`, `RECEIPT_CORS_ORIGIN=`, `RECEIPT_SCANS_PER_WEEK`, `RECEIPT_PHOTO_DAYS`).
 - **The server speaks plain HTTP.** The password is sent with every request, so anywhere outside your own network
   (or Tailscale) put a reverse proxy with HTTPS in front of it and never expose port 3000 directly.
   The app itself refuses plain `http://` for anything but local addresses.
 - **Keep `.env` and `state/` private.** They contain your keys, the database, the photos and the AH tokens.
   Never commit them; back up `state/` somewhere private.
 - **Admin dashboard:** off by default. When on (`RECEIPT_ADMIN_PORT` + `RECEIPT_ADMIN_KEY`) it is a separate port that
-  needs its own key on every call and only answers requests from private/LAN addresses (localhost, private IPs, `.local`
-  mDNS), so it is not reachable from the public internet even if the port is open.
+  needs its own key on every call (wrong keys: 10 a minute). It listens on all interfaces and does not check where a
+  request comes from: open its port to your LAN only, never forward it (or proxy it) to the internet. Use a long random
+  admin key.
 - **Albert Heijn integration:** off by default and only for your own server (it uses an unofficial API). A server
   that other people use should leave `RECEIPT_USE_AH_API` off.
 - **Gemini:** receipt photos are sent to Google. See [PRIVACY.md](PRIVACY.md).

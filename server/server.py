@@ -16,7 +16,8 @@ Configure with environment variables:
   RECEIPT_HOST      default 0.0.0.0
   RECEIPT_PORT      default 3000
   RECEIPT_DATA_DIR  default ./state  (registry, databases and photos live here)
-  RECEIPT_USE_AH_API  default false. true switches on the unofficial Albert Heijn integration (see README)
+  RECEIPT_USE_AH_API  default false. true switches on the unofficial Albert Heijn integration (see README);
+                      only then can a household have it (`tenant ah` / the dashboard can switch it off per household)
   RECEIPT_AH_API    default https://api.ah.nl (override for tests)
   RECEIPT_GEMINI_KEY    Gemini API key; without it scanning is switched off
   RECEIPT_GEMINI_MODEL  default gemini-3.8-flash
@@ -29,7 +30,7 @@ Configure with environment variables:
   RECEIPT_SCANS_PER_WEEK   default 25: Gemini scans per week for households from `tenant add` (0 = unlimited)
   RECEIPT_PHOTO_DAYS       default 0 (keep): delete photos of kept receipts after this many days
                            (these four can also be changed live in the admin dashboard, which wins over the environment)
-  RECEIPT_ADMIN_PORT, RECEIPT_ADMIN_KEY  turn on the local admin dashboard (see admin.py); RECEIPT_ADMIN_HOST is 127.0.0.1
+  RECEIPT_ADMIN_PORT, RECEIPT_ADMIN_KEY  turn on the admin dashboard (see admin.py); RECEIPT_ADMIN_HOST default 0.0.0.0
   RECEIPT_TRUSTED_PROXY    comma-separated addresses of your reverse proxy: only then X-Forwarded-For is believed
   RECEIPT_CORS_ORIGIN      default *. Set to nothing to send no CORS headers (the phone apps do not need them)
 """
@@ -65,14 +66,14 @@ DATA_DIR = Path(os.environ.get("RECEIPT_DATA_DIR", Path(__file__).parent / "stat
 USE_AH_API = os.environ.get("RECEIPT_USE_AH_API", "").strip().lower() in ("1", "true", "yes", "on")
 AH_API = os.environ.get("RECEIPT_AH_API", "https://api.ah.nl").rstrip("/")
 PAYEE_IBAN = re.sub(r"\s+", "", os.environ.get("RECEIPT_IBAN", "")).upper()
-PAYEE_NAME = os.environ.get("RECEIPT_NAME", "").strip().strip("\"'").strip()[:70]
+PAYEE_NAME = tenants.clean_payee_name(os.environ.get("RECEIPT_NAME", "").strip().strip("\"'"))
 try:
     PAYEE_BUNQ = tenants.clean_bunq(os.environ.get("RECEIPT_BUNQ", "").strip().strip("\"'"))
 except ValueError:
     PAYEE_BUNQ = ""
-# (quotes are stripped because `docker run --env-file` keeps them; an EPC QR code allows 70 characters)
+# (quotes are stripped because `docker run --env-file` keeps them)
 STATIC_DIR = Path(__file__).parent / "static"
-ADMIN_HOST = os.environ.get("RECEIPT_ADMIN_HOST", "127.0.0.1")
+ADMIN_HOST = os.environ.get("RECEIPT_ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.environ.get("RECEIPT_ADMIN_PORT", "0") or 0)
 ADMIN_KEY = os.environ.get("RECEIPT_ADMIN_KEY", "")
 TRUSTED_PROXIES = {p.strip() for p in os.environ.get("RECEIPT_TRUSTED_PROXY", "").split(",") if p.strip()}
@@ -178,10 +179,11 @@ def run_scan(tenant: Tenant, scan_id: str, image: bytes, mime: str, created_at: 
     rate = tenant.scan_rate if tenant.scan_rate is not None else setting("scans_per_minute")
     if rate and not SCAN_LIMITER.take(tenant.id, rate):
         raise scanning.ScanError("scan_rate_limited", "Je scant te snel. Wacht even en probeer het opnieuw.", 429)
-    if not HOUSEHOLDS.try_count_scan(tenant, setting("scans_per_week")):
+    if not HOUSEHOLDS.scans_left(tenant, setting("scans_per_week")):
         raise scanning.ScanError("scan_quota", "Je scanlimiet voor deze week is bereikt.", 429)
-    STATS["scans"] += 1
     scan, issues, warnings = scanning.scan_image(image, mime)
+    HOUSEHOLDS.count_scan(tenant)  # only a scan that was read counts, a failed one does not
+    STATS["scans"] += 1
     today = time.strftime("%Y-%m-%d")
     listing, detail = scanning.to_app_shapes(scan_id_to_receipt_id(scan_id), scan, warnings, today)
     status = "draft" if issues else "ok"
@@ -473,8 +475,8 @@ class Handler(BaseHTTPRequestHandler):
         self._json({"error": "not_found"}, 404)
 
     def _ah_for_tenant(self) -> bool:
-        t = self.tenant.ah_enabled
-        return t if t is not None else USE_AH_API
+        """RECEIPT_USE_AH_API decides: when it is off, no household has AH; when on, a household can be switched off."""
+        return USE_AH_API and self.tenant.ah_enabled is not False
 
     def _route_auth(self, method: str, path: str) -> bool:
         tenant = self.tenant
@@ -678,6 +680,10 @@ def server_info() -> dict:
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     os.umask(0o077)  # everything the server creates (databases, photos) is private to its user
+    for env, _ in LIMIT_SETTINGS.values():  # a typo here would otherwise turn every request into a 400
+        value = os.environ.get(env, "").strip()
+        if value and not value.isdigit():
+            sys.exit(f"{env} must be a whole number (0 or more), not {value!r}. Check your .env file.")
     if len(sys.argv) > 1 and sys.argv[1] == "tenant":
         sys.exit(tenants.cli(HOUSEHOLDS, sys.argv[2:], iban_valid))
     try:

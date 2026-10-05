@@ -10,9 +10,9 @@ COPY admin/ admin/
 # The server runs as an unprivileged user (uid 10001). entrypoint.sh starts as root only to hand /data to that
 # user (so data from older images keeps working), then drops every privilege before the server starts.
 RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin bonnetje && chmod +x entrypoint.sh
-# The admin dashboard (off unless RECEIPT_ADMIN_PORT + RECEIPT_ADMIN_KEY are set) listens on all interfaces
-# *inside* the container; publish its port on the host's 127.0.0.1 only (see compose.yml).
-ENV RECEIPT_DATA_DIR=/data RECEIPT_ADMIN_HOST=0.0.0.0 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# The admin dashboard (off unless RECEIPT_ADMIN_PORT + RECEIPT_ADMIN_KEY are set) listens on all interfaces; publish
+# its port to your LAN only and never forward it to the internet (see compose.yml).
+ENV RECEIPT_DATA_DIR=/data PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD python3 -c "import urllib.request as u; u.urlopen('http://127.0.0.1:3000/api/health', timeout=4)"

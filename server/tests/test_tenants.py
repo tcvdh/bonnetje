@@ -9,6 +9,7 @@ import tempfile
 import threading
 import time
 import unittest
+from pathlib import Path
 
 _tmp = tempfile.TemporaryDirectory()
 os.environ.setdefault("RECEIPT_DATA_DIR", _tmp.name)
@@ -78,13 +79,31 @@ class RegistryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             HH.default().photo_path("../receipt.db")
 
+    def test_old_usage_table_is_renamed_to_week(self):
+        with tempfile.TemporaryDirectory() as d:
+            import sqlite3
+            conn = sqlite3.connect(Path(d) / "registry.db")
+            conn.execute("CREATE TABLE usage (tenant_id TEXT NOT NULL, month TEXT NOT NULL, scans INTEGER NOT NULL,"
+                         " PRIMARY KEY (tenant_id, month))")
+            conn.execute("INSERT INTO usage VALUES ('default', ?, 3)", (tenants.Households._week(),))
+            conn.commit()
+            conn.close()
+            hh = tenants.Households(Path(d), use_default=True)
+            hh.init()
+            self.assertEqual(hh.scans_this_week("default"), 3)
+
     def test_scan_quota(self):
+        def scan(tenant, default_limit):
+            if not HH.scans_left(tenant, default_limit):
+                return False
+            HH.count_scan(tenant)
+            return True
         limited, _ = HH.add("Limited", scan_limit=2)
-        self.assertEqual([HH.try_count_scan(limited, 0) for _ in range(3)], [True, True, False])
+        self.assertEqual([scan(limited, 0) for _ in range(3)], [True, True, False])
         free, _ = HH.add("Free")
-        self.assertTrue(all(HH.try_count_scan(free, 0) for _ in range(5)))  # 0 = unlimited
-        self.assertEqual([HH.try_count_scan(free, 6) for _ in range(2)], [True, False])  # the server default applies
-        self.assertTrue(all(HH.try_count_scan(HH.default(), 1) for _ in range(3)))  # the built-in household never
+        self.assertTrue(all(scan(free, 0) for _ in range(5)))  # 0 = unlimited
+        self.assertEqual([scan(free, 6) for _ in range(2)], [True, False])  # the server default applies
+        self.assertTrue(all(scan(HH.default(), 1) for _ in range(3)))  # the built-in household never
 
     def test_old_photos_go_but_the_receipt_stays(self):
         tenant, _ = HH.add("Photos")
@@ -219,10 +238,35 @@ class HttpTests(unittest.TestCase):
 
     def test_scan_quota_answers_429(self):
         limited, key = HH.add("Quota", scan_limit=1)
-        HH.try_count_scan(limited, 0)
+        HH.count_scan(limited)
         status, body = self.call("POST", "/api/scans", {"image": "aGk=", "mimeType": "image/jpeg"}, key=key)
         self.assertEqual((status, body["error"]), (429, "scan_quota"))
         self.assertEqual(list(limited.scan_dir.iterdir()), [])  # nothing was kept
+
+    def test_a_failed_scan_is_not_counted(self):
+        tenant, key = HH.add("Failed scan")
+        status, body = self.call("POST", "/api/scans", {"image": "aGk=", "mimeType": "image/jpeg"}, key=key)
+        self.assertEqual((status, body["error"]), (503, "gemini_not_configured"))
+        self.assertEqual(HH.scans_this_week(tenant.id), 0)
+
+    def test_cli_payee_keeps_what_you_leave_out(self):
+        tenant, _ = HH.add("Payee CLI")
+        def run(*args):
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                return tenants.cli(HH, ["payee", tenant.id, *args], server.iban_valid)
+        self.assertEqual(run("NL91ABNA0417164300", "Line\nBreak"), 0)
+        self.assertEqual(run("--bunq", "some.one"), 0)
+        self.assertEqual(server.payee(tenant), {"iban": "NL91ABNA0417164300", "name": "Line Break", "bunq": "some.one"})
+        self.assertEqual(run("--bunq", ""), 0)
+        self.assertEqual(server.payee(tenant), {"iban": "NL91ABNA0417164300", "name": "Line Break"})
+        self.assertEqual(run("--clear"), 0)
+        self.assertIsNone(server.payee(tenant))
+
+    def test_cli_refuses_bad_numbers(self):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(tenants.cli(HH, ["add", "X", "--scans"], server.iban_valid), 1)
+            self.assertEqual(tenants.cli(HH, ["add", "X", "--scans", "-1"], server.iban_valid), 1)
+            self.assertEqual(tenants.cli(HH, ["limit", self.a.id, "week", "-1"], server.iban_valid), 1)
 
     def test_each_household_has_its_own_albert_heijn_login(self):
         old, server.USE_AH_API = server.USE_AH_API, True
@@ -264,6 +308,10 @@ class HttpTests(unittest.TestCase):
             self.assertTrue(self.call("GET", "/api/auth/status", key=self.key_b)[1]["ahEnabled"])
             # Auth routes blocked for A
             self.assertEqual(self.call("POST", "/api/auth/begin", key=self.key_a)[0], 404)
+            # RECEIPT_USE_AH_API leads: with it off, switching a household on does nothing
+            server.USE_AH_API = False
+            HH.update(self.a.id, ah_enabled=1)
+            self.assertFalse(self.call("GET", "/api/auth/status", key=self.key_a)[1]["ahEnabled"])
         finally:
             server.USE_AH_API = old
             HH.update(self.a.id, ah_enabled=None)

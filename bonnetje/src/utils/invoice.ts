@@ -1,7 +1,7 @@
 import { AppData, Invoice, InvoiceLine, InvoiceReceipt, Receipt, ReceiptDetail } from "../types";
 import { PersonName } from "../constants";
-import { eur, round2 } from "./money";
-import { receiptCents, shareCents } from "./settle";
+import { eur } from "./money";
+import { receiptCents, shareCents, sumCents, toCents } from "./settle";
 
 /** Receipts this person still has to pay, using the same rules as the balance on the main screen. */
 export function pendingReceiptIds(person: PersonName, data: AppData): string[] {
@@ -74,12 +74,13 @@ export function withoutReservation(data: AppData, person: string): Record<string
 export function buildInvoice({ person, receiptIds, data, receipts, details, now, scope }: BuildOptions): Invoice {
   // A number promised in this person's QR code wins, so the transfer description and invoice match.
   const reserved = scope === "all" ? data.reservations?.[person] : undefined;
-  const drafts: { receiptId: string; lines: InvoiceLine[] }[] = [];
+  const drafts: { receiptId: string; lines: InvoiceLine[]; cents: number }[] = [];
 
   receiptIds.forEach((id) => {
     const assignments = data.assignments[id] || {};
     const products = details[id]?.products ?? [];
     const lines: InvoiceLine[] = [];
+    let receiptTotal = 0; // cents, so the subtotals and the total are exact
 
     Object.keys(assignments)
       .map(Number)
@@ -88,6 +89,7 @@ export function buildInvoice({ person, receiptIds, data, receipts, details, now,
         const a = assignments[i];
         const cents = shareCents(a, i)[person] ?? 0;
         if (cents === 0) return;
+        receiptTotal += cents;
         const product = products[i];
         lines.push({
           name: product?.name ?? `Product ${i + 1}`,
@@ -97,20 +99,20 @@ export function buildInvoice({ person, receiptIds, data, receipts, details, now,
           amount: cents / 100,
         });
       });
-    if (lines.length) drafts.push({ receiptId: id, lines });
+    if (lines.length) drafts.push({ receiptId: id, lines, cents: receiptTotal });
   });
 
   const dateOf = (id: string) => receipts.find((r) => r.id === id)?.dateTime ?? "";
   drafts.sort((x, y) => dateOf(x.receiptId).localeCompare(dateOf(y.receiptId)));
 
-  const invoiceReceipts: InvoiceReceipt[] = drafts.map(({ receiptId, lines }) => {
+  const invoiceReceipts: InvoiceReceipt[] = drafts.map(({ receiptId, lines, cents }) => {
     const receipt = receipts.find((r) => r.id === receiptId);
     return {
       receiptId,
       store: storeName(receipt),
       dateTime: receipt?.dateTime ?? now.toISOString(),
       lines,
-      subtotal: round2(lines.reduce((sum, l) => sum + l.amount, 0)),
+      subtotal: cents / 100,
     };
   });
 
@@ -121,13 +123,13 @@ export function buildInvoice({ person, receiptIds, data, receipts, details, now,
     paidAt: now.toISOString(),
     scope,
     receipts: invoiceReceipts,
-    total: round2(invoiceReceipts.reduce((sum, r) => sum + r.subtotal, 0)),
+    total: sumCents(drafts.map((d) => d.cents)) / 100,
   };
 }
 
 /** What still counts as paid: receipts whose payment was not undone. */
 export function activeTotal(inv: Invoice): number {
-  return round2(inv.receipts.filter((r) => !r.voidedAt).reduce((sum, r) => sum + r.subtotal, 0));
+  return sumCents(inv.receipts.filter((r) => !r.voidedAt).map((r) => toCents(r.subtotal))) / 100;
 }
 
 /** Marks one receipt as withdrawn on every matching invoice of this person. */

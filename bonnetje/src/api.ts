@@ -69,31 +69,46 @@ export async function saveServerConfig(next: ServerConfig): Promise<void> {
 
 // ── Requests ──
 
+/** How long a request may take. A scan waits for Gemini, which the server gives up to two minutes. */
+const TIMEOUT_MS = 20_000;
+const SCAN_TIMEOUT_MS = 150_000;
+
 async function request<T>(
   path: string,
-  init: { method?: string; body?: unknown; cfg?: ServerConfig } = {}
+  init: { method?: string; body?: unknown; cfg?: ServerConfig; timeoutMs?: number } = {}
 ): Promise<T> {
   const cfg = init.cfg ?? config;
   if (!cfg) throw new ApiError("not_configured", 0);
 
-  let res: Response;
+  // A server that never answers must not leave a spinner forever.
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), init.timeoutMs ?? TIMEOUT_MS);
   try {
-    res = await fetch(`${cfg.url}${path}`, {
-      method: init.method ?? "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${cfg.key}`,
-      },
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
-    });
-  } catch {
-    throw new ApiError("unreachable", 0);
-  }
+    let res: Response;
+    try {
+      res = await fetch(`${cfg.url}${path}`, {
+        method: init.method ?? "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${cfg.key}`,
+        },
+        body: init.body === undefined ? undefined : JSON.stringify(init.body),
+        signal: abort.signal,
+      });
+    } catch {
+      throw new ApiError(abort.signal.aborted ? "timeout" : "unreachable", 0);
+    }
 
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(json?.error ?? `http_${res.status}`, res.status, json?.message ?? "", json);
-  return json as T;
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(json?.error ?? `http_${res.status}`, res.status, json?.message ?? "", json);
+    return json as T;
+  } finally {
+    clearTimeout(timer);
+  }
 }
+
+/** No answer at all (offline, or the server took too long): the cache and a later retry can stand in. */
+const isNoAnswer = (e: unknown) => e instanceof ApiError && (e.code === "unreachable" || e.code === "timeout");
 
 /** Turn an ApiError into a message for the user. */
 export function describeError(e: unknown): string {
@@ -102,6 +117,8 @@ export function describeError(e: unknown): string {
   switch (code) {
     case "unreachable":
       return "Kan de server niet bereiken. Controleer het adres en je verbinding.";
+    case "timeout":
+      return "De server reageert niet op tijd. Probeer het zo opnieuw.";
     case "unauthorized":
       return "De server-sleutel klopt niet, of dit huishouden is uitgeschakeld.";
     case "rate_limited":
@@ -112,6 +129,18 @@ export function describeError(e: unknown): string {
       return "Dit is te groot om naar de server te sturen.";
     case "ah_not_logged_in":
       return "De server is niet ingelogd bij Albert Heijn. Log in via de beheerpagina van de server.";
+    case "ah_disabled":
+      return "Albert Heijn staat uit op deze server.";
+    case "not_found":
+      return "Dit staat niet (meer) op de server.";
+    case "photo_missing":
+      return "De foto van dit bonnetje staat niet meer op de server.";
+    case "bad_request":
+      return "De server begreep dit verzoek niet. Werk de app en de server bij en probeer het opnieuw.";
+    case "server_error":
+      return "Er ging iets mis op de server. Probeer het zo opnieuw; blijft het misgaan, kijk dan in het serverlog.";
+    case "http_503":
+      return "De server is even te druk. Probeer het zo opnieuw.";
     default:
       return "Er ging iets mis bij de server.";
   }
@@ -207,9 +236,14 @@ export async function scanReceipt(base64: string, mimeType: string): Promise<Sca
     const res = await request<{ receipt: Receipt; warnings: string[] }>("/api/scans", {
       method: "POST",
       body: { image: base64, mimeType },
+      timeoutMs: SCAN_TIMEOUT_MS,
     });
     return { kind: "saved", receipt: res.receipt, warnings: res.warnings ?? [] };
   } catch (e) {
+    if (e instanceof ApiError && e.code === "timeout") {
+      // The server may still finish and keep it; then it shows up in the list after a refresh.
+      throw new ApiError("timeout", 0, "Het lezen duurde te lang. Trek de lijst zo omlaag: staat het bonnetje er niet, scan dan opnieuw.");
+    }
     if (e instanceof ApiError && e.code === "scan_needs_review") {
       return {
         kind: "review",
@@ -252,6 +286,9 @@ let dirty = false;
 let latestData: AppData | null = null;
 let saveChain: Promise<unknown> = Promise.resolve();
 let onRemoteChange: ((data: AppData) => void) | null = null;
+let onSaveRejected: ((error: ApiError) => void) | null = null;
+/** The rejection the user was last told about, so a retry that fails the same way does not ask again. */
+let reportedRejection = "";
 /** Bumped by forgetServer(): a save that was still running for the old server must then change nothing. */
 let epoch = 0;
 
@@ -268,6 +305,7 @@ export async function forgetServer(): Promise<void> {
   dirty = false;
   latestData = null;
   dataVersion = 0;
+  reportedRejection = "";
   await SecureStore.deleteItemAsync(URL_KEY);
   await SecureStore.deleteItemAsync(APP_KEY_KEY);
   try {
@@ -281,6 +319,14 @@ export async function forgetServer(): Promise<void> {
  */
 export function setConflictHandler(fn: ((data: AppData) => void) | null) {
   onRemoteChange = fn;
+}
+
+/**
+ * Called when the server refuses a save for a reason a retry will not fix by itself (wrong key, too large, ...).
+ * The change stays on the phone and is sent again later; the screen should say it is not on the server yet.
+ */
+export function setSaveRejectedHandler(fn: ((error: ApiError) => void) | null) {
+  onSaveRejected = fn;
 }
 
 async function writeCache(data: AppData) {
@@ -338,7 +384,7 @@ export async function loadData(): Promise<LoadResult> {
     await writeCache(data);
     return { data, offline: false };
   } catch (e) {
-    if (!(e instanceof ApiError) || e.code !== "unreachable") throw e;
+    if (!isNoAnswer(e)) throw e;
     const cached = await readCache();
     if (cached) {
       dataVersion = cached.version;
@@ -364,6 +410,7 @@ async function sendData(data: AppData): Promise<SendResult> {
     if (mine !== epoch) return stale;
     dataVersion = res.version;
     dirty = false;
+    reportedRejection = "";
     await writeCache(data);
     return { status: "saved", data };
   } catch (e) {
@@ -384,6 +431,12 @@ async function sendData(data: AppData): Promise<SendResult> {
     if (mine !== epoch) return stale;
     dirty = true;
     await writeCache(data);
+    // Offline, busy (429, 5xx) or a lost race fix themselves; anything else the user has to know about.
+    const transient = isNoAnswer(e) || !(e instanceof ApiError) || e.status === 409 || e.status === 429 || e.status >= 500;
+    if (!transient && e.code !== reportedRejection) {
+      reportedRejection = e.code;
+      onSaveRejected?.(e);
+    }
     return { status: "offline", data };
   }
 }

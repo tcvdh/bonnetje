@@ -58,18 +58,15 @@ class AdminTests(unittest.TestCase):
         self.assertEqual(status, 201)
         return data["id"], data["key"]
 
-    def test_only_with_the_key_and_a_local_host_name(self):
+    def test_only_with_the_key(self):
         self.assertEqual(self.call("GET", "/api/overview", key=None)[0], 401)
         self.assertEqual(self.call("GET", "/api/overview", key="nope")[0], 401)
-        self.assertEqual(self.call("GET", "/api/overview", host="evil.example.com")[0], 403)  # DNS rebinding
-        self.assertEqual(self.call("GET", "/api/overview", host="127.0.0.1")[0], 200)
-        self.assertEqual(self.call("GET", "/api/overview", host="[::1]")[0], 200)
+        self.assertEqual(self.call("GET", "/api/overview", host="admin.example.com")[0], 200)  # e.g. behind a reverse proxy
         status, page, resp = self.call("GET", "/", key=None)
         self.assertEqual(status, 200)
         self.assertIn(b"Bonnetje beheer", page)
         self.assertIn("default-src 'none'", resp.getheader("Content-Security-Policy"))
         self.assertIsNone(resp.getheader("Access-Control-Allow-Origin"))  # no CORS: web pages cannot call it
-        self.assertEqual(self.call("GET", "/", key=None, host="evil.example.com")[0], 403)
 
     def test_wrong_keys_are_throttled(self):
         admin._failures = admin.Limiter(60)
