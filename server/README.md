@@ -36,7 +36,7 @@ All settings are environment variables (passed via `--env-file` with Docker, or 
 | `RECEIPT_GEMINI_KEY` | for scanning | Gemini API key; without it, scanning is off. See the privacy note under [Scanning receipts](#scanning-receipts-gemini). |
 | `RECEIPT_USE_AH_API` | no | Default `false`. `true` switches on the unofficial Albert Heijn integration. **Self-hosting only**, see [below](#albert-heijn-optional). |
 | `RECEIPT_PORT` | no | Default `3000`. |
-| `RECEIPT_HOST` | no | Default `0.0.0.0` (all interfaces). Use `127.0.0.1` behind a reverse proxy. |
+| `RECEIPT_HOST` | no | Default `0.0.0.0` (all interfaces). Use `127.0.0.1` when a reverse proxy runs on the same machine without Docker. |
 | `RECEIPT_DATA_DIR` | no | Default `./state`. The Docker image fixes it to `/data`. |
 | `RECEIPT_REQUESTS_PER_MINUTE` | no | Default `120`. Requests per minute per user (`0` = unlimited). Opening the app takes about 3 requests plus one per open receipt, so a busy user bursts to roughly 30. |
 | `RECEIPT_SCANS_PER_MINUTE` | no | Default `5`. Gemini scans per minute per user (`0` = unlimited). |
@@ -45,7 +45,7 @@ All settings are environment variables (passed via `--env-file` with Docker, or 
 | `RECEIPT_ADMIN_PORT`, `RECEIPT_ADMIN_KEY` | no | Both set = the [admin dashboard](#admin-dashboard) runs on that port, protected by that key. `RECEIPT_ADMIN_HOST` (default `0.0.0.0`) is where it listens. Keep the port on your LAN; never forward it to the internet. |
 | `RECEIPT_TRUSTED_PROXY` | no | Address(es) of your reverse proxy, comma-separated (for Docker usually the proxy container or the Docker gateway). Only requests from these are allowed to say who the real client is (`X-Forwarded-For`), so the rate limits work per person instead of per proxy. |
 | `RECEIPT_CORS_ORIGIN` | no | Default `*`. Set it empty to send no CORS headers at all: the phone apps don't need them, only the browser version of the app does. Empty is right for a public server. |
-| `RECEIPT_GEMINI_MODEL`, `RECEIPT_SCAN_PROMPT`, `RECEIPT_AH_API` | no | Model name, prompt file and AH API base (for tests). |
+| `RECEIPT_GEMINI_MODEL`, `RECEIPT_SCAN_PROMPT`, `RECEIPT_GEMINI_API`, `RECEIPT_AH_API` | no | Model name, prompt file, and the Gemini / AH API base addresses (for tests). |
 
 The four limits above are defaults for every user: each user can have its own (`tenant limit`, or the dashboard), and
 the dashboard can change the server-wide values while the server runs (a value set there wins over `.env`).
@@ -92,7 +92,7 @@ Good to know:
   **What is shared:** the Gemini key (the scanning costs are yours), the `RECEIPT_USE_AH_API` switch, the scan prompt.
 - **Where it lives:** `state/registry.db` (which key belongs to which user) and one folder per user in
   `state/tenants/<id>/`. Backing up, moving or exporting a user is copying its folder while the server is stopped
-  (or take a consistent copy of its database with `sqlite3 receipt.db ".backup copy.db"`); deleting one is `tenant delete`.
+  (or take a consistent copy of its database while it runs, see [Backup](DEPLOY.md#backup)); deleting one is `tenant delete`.
 - **Without `RECEIPT_APP_KEY`** the server only knows the users you added. It refuses to start when there is neither.
 - **Hosting for other people:** keep `RECEIPT_USE_AH_API` off (unofficial API, not for other people's use), set
   `RECEIPT_SCANS_PER_WEEK`, `RECEIPT_PHOTO_DAYS`, `RECEIPT_TRUSTED_PROXY` and an empty `RECEIPT_CORS_ORIGIN`, and
@@ -171,8 +171,8 @@ How it is kept private:
       respond 403
   }
   ```
-- Docker: the image listens on all interfaces *inside* the container, and `compose.yml` publishes it as `3001:3001`
-  (LAN-accessible). Access it from any machine on your local network.
+- Docker: `compose.yml` publishes it as `3001:3001`, so it is reachable from your LAN. Don't forward that port on your
+  router.
 - Everything it changes is written to the log (`admin: user ... changed`), never a key.
 
 ## Albert Heijn (optional)
@@ -276,7 +276,8 @@ bonnetje.example.com {
 
 ## API (all except `/api/health` need `Authorization: Bearer <key>`)
 
-Every key belongs to one user and only sees that user's data. Errors: `401` wrong key, `413 too_large`,
+Every key belongs to one user and only sees that user's data. Errors are JSON `{error}`; scan errors also carry a
+Dutch `message` for the app. `400 bad_request`, `401` wrong key, `404 not_found`, `413 too_large`,
 `429` (`too_many_attempts`, `rate_limited`, `scan_rate_limited`, `scan_quota`, `scan_busy` while that user's previous scan runs), `503` when the server is full.
 
 | Method | Path | |

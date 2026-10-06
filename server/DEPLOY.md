@@ -57,7 +57,8 @@ RECEIPT_GEMINI_KEY=your-gemini-key
 | `RECEIPT_PORT` | no | Default `3000`. |
 | `RECEIPT_HOST` | no | Default `0.0.0.0`. |
 
-After changing settings: `docker restart bonnetje` (or `docker compose restart`).
+After changing settings: `docker restart bonnetje` (or `docker compose restart`). If it does not come back up,
+`docker logs bonnetje` says which setting is wrong (for example a limit that is not a whole number).
 
 ## More users on the same server
 
@@ -137,5 +138,13 @@ The server is plain HTTP. Put a reverse proxy in front for HTTPS (see `README.md
 ## Backup
 
 Everything is in `./state/`: `receipt.db` and `scans/` (the built-in user), `registry.db` and `tenants/` (other
-users). Copy or snapshot that folder while the server is stopped (`docker stop bonnetje`), or take a consistent
-copy of a database while it runs with `sqlite3 receipt.db ".backup copy.db"`. One user alone: its `tenants/<id>/` folder.
+users). Copy or snapshot that folder while the server is stopped (`docker stop bonnetje`). One user alone: its
+`tenants/<id>/` folder.
+
+To copy a database while the server runs (the image has no `sqlite3` tool, Python does it):
+
+```bash
+docker exec -u bonnetje bonnetje python3 -c "import sqlite3; sqlite3.connect('/data/receipt.db').backup(sqlite3.connect('/data/backup.db'))"
+```
+
+That writes `./state/backup.db`; use `/data/tenants/<id>/receipt.db` for another user, or `/data/registry.db`.

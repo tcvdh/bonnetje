@@ -45,6 +45,8 @@ Things that are deliberate, so you can judge them:
 - The app's build tooling (Expo) has a moderate advisory in a build-time dependency (`uuid` via `xcode`); it is not part of the
   shipped app. Dependabot (`.github/dependabot.yml`) keeps dependencies, actions and the Docker base image current.
 - Actions in the workflows are referenced by tag, not by commit hash.
+- The Android APK is signed with Expo's public debug key (testing phase): anyone can sign an APK that installs as an
+  update over it. Only install it from the download page.
 
 Cross-user isolation is covered by automated tests (`server/tests/test_tenants.py`). If you find a way to read
 or change another user's data, that is exactly the kind of report we want.

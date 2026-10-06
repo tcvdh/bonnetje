@@ -94,8 +94,11 @@ and press **Run workflow.** When it finishes:
 | Older builds | [Releases](https://github.com/tcvdh/bonnetje/releases) |
 
 The site only holds the latest build of each platform (a platform you skip in a run is carried over from the live site). Every build is also kept as a GitHub release (tag
-`v<version>-build.<n>`). Type a version in the workflow form (or bump `expo.version` in `bonnetje/app.json`) for a new version
+`v<version>-build.<n>`). Type a version in the workflow form (`X.Y.Z`, anything else stops the run; or bump `expo.version` in `bonnetje/app.json`) for a new version
 number; the build number goes up by itself.
+
+The APK is signed with Expo's public debug key for now (testing phase). That is fine for sideloading, but anyone
+can sign an APK that installs over it, and moving to a real key later means every Android user uninstalls once.
 
 The site also gets `version.txt` (<https://tcvdh.github.io/bonnetje/version.txt>), the version in plain text. The app
 checks it on start, when it comes back to the front, and on pull to refresh, and compares it with its own version:
@@ -107,6 +110,9 @@ checks it on start, when it comes back to the front, and on pull to refresh, and
 
 So bump the minor version when old installs must stop writing the shared data (a breaking change to its shape or
 meaning), and the patch version for everything else. Offline, or with no `version.txt`, the app shows nothing.
+
+Every run writes `version.txt`, also when a platform was skipped or failed. So build **both** platforms in a run that
+bumps the minor or major version: otherwise installs of the other platform are locked with no newer build to install.
 
 ## Privacy and security
 
